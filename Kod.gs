@@ -901,8 +901,8 @@ function syncAndGetNewData(manualTeamName, alreadyLocked = false) {
     }
     const lastRowMaster = masterSheet.getLastRow();
     if (lastRowMaster < 2) { if(lock.hasLock()) lock.releaseLock(); return; }if (lastRowMaster < 2) {
-      if (!alreadyLocked && lock.hasLock()) {
-        lock.releaseLock();
+      
+      lock.releaseLock();
       }
       return;
     }
