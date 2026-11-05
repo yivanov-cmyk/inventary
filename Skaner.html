@@ -422,7 +422,13 @@
                   handleSyncError(tasksWithTeam, btn, "SERWER PRZECIĄŻONY - SPRAWDŹ ARKUSZ");
               }
           }, 60000);
+          let batchId = localStorage.getItem("inventory_batch_id");
 
+
+          if (!batchId) {
+            batchId = crypto.randomUUID();
+            localStorage.setItem("inventory_batch_id", batchId);
+          }
           google.script.run
               .withSuccessHandler(function(res) {
                   syncCompleted = true; 
@@ -458,12 +464,13 @@
                   clearTimeout(syncTimeout);
                   handleSyncError(tasksWithTeam, btn, "BŁĄD POŁĄCZENIA (WiFi?)");
               })
-              .saveAllTasks(teamName, tasksWithTeam, startTime);
+              .saveAllTasks(teamName, tasksWithTeam, startTime, batchId);
       }
 
       function finalizeSuccess(res, btn) {
           localStorage.removeItem('inventory_tasks');
           localStorage.removeItem('backup_tasks');
+          localStorage.removeItem('inventory_batch_id');
           tasks = res.tasks || res.newData.tasks;
           currentIndex = 0;
           startTime = res.startTime || res.newData.startTime;
