@@ -193,57 +193,7 @@ function emergencyForceSaveTeam() {
   }
 
   const currentTasks = teamSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-  if (!Array.isArray(allTasks)) {
-    throw new Error("Nieprawidłowe dane skanera");
-  }
   
-  
-  if (allTasks.length !== currentTasks.length) {
-    throw new Error(
-      "Niezgodna liczba zadań. Skaner: " +
-      allTasks.length +
-      ", arkusz: " +
-      currentTasks.length
-    );
-  }
-  
-  
-  const sentTasks = new Map();
-  
-  
-  allTasks.forEach(t => {
-    const key = JSON.stringify([
-      String(t.loc),
-      String(t.sku),
-      Number(t.masterRow)
-    ]);
-  
-  
-    if (sentTasks.has(key)) {
-      throw new Error("Duplikat zadania: " + t.loc);
-    }
-  
-  
-    if (
-      t.qty === "" ||
-      t.qty === null ||
-      t.qty === undefined ||
-      !Number.isFinite(Number(String(t.qty).replace(",", ".")))
-    ) {
-      throw new Error("Brak lub błędna ilość: " + t.loc);
-    }
-  
-  
-    sentTasks.set(key, t);
-  });
-  
-  
-  currentTasks.forEach(row => {
-    const key = JSON.stringify([
-      String(row[0]),
-      String(row[1]),
-      Number(row[9])
-    ]);
   
   
     if (!sentTasks.has(key)) {
@@ -500,6 +450,57 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     }
 
     const currentTasks = teamSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+    if (!Array.isArray(allTasks)) {
+    throw new Error("Nieprawidłowe dane skanera");
+  }
+  
+  
+  if (allTasks.length !== currentTasks.length) {
+    throw new Error(
+      "Niezgodna liczba zadań. Skaner: " +
+      allTasks.length +
+      ", arkusz: " +
+      currentTasks.length
+    );
+  }
+  
+  
+  const sentTasks = new Map();
+  
+  
+  allTasks.forEach(t => {
+    const key = JSON.stringify([
+      String(t.loc),
+      String(t.sku),
+      Number(t.masterRow)
+    ]);
+  
+  
+    if (sentTasks.has(key)) {
+      throw new Error("Duplikat zadania: " + t.loc);
+    }
+  
+  
+    if (
+      t.qty === "" ||
+      t.qty === null ||
+      t.qty === undefined ||
+      !Number.isFinite(Number(String(t.qty).replace(",", ".")))
+    ) {
+      throw new Error("Brak lub błędna ilość: " + t.loc);
+    }
+  
+  
+    sentTasks.set(key, t);
+  });
+  
+  
+  currentTasks.forEach(row => {
+    const key = JSON.stringify([
+      String(row[0]),
+      String(row[1]),
+      Number(row[9])
+    ]);
     const masterSheet = SS.getSheetByName(MASTER_SHEET_NAME);
     const reportSheet = SS.getSheetByName(REPORT_SHEET_NAME);
     
