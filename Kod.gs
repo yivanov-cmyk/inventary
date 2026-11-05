@@ -669,10 +669,7 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       
       
         } else {
-      
-      
-          newReportEntries.push(
-            buildReportRow(
+            const newRow = buildReportRow(
               new Date(),
               teamName,
               loc,
@@ -688,7 +685,16 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
               masterRowIdx,
               comment,
               masterSheet
-            )
+            );
+          
+          
+            // U: BatchId pierwszego liczenia
+            // V: BatchId drugiego liczenia
+            newRow.push("", batchId);
+          
+          
+            newReportEntries.push(newRow);
+          }
           );
       
       
@@ -732,14 +738,27 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
 
     // 3. Dodanie nowych wierszy do Raportu
     if (newReportEntries.length > 0) {
-      const rowsWithBatch = newReportEntries.map(row => [
-        ...row,
-        batchId
-      ]);
+      const rowsWithBatch = newReportEntries.map(row => {
+        if (row.length === 22) {
+          return row;
+        }
+    
+    
+        return [
+          ...row,
+          batchId,
+          ""
+        ];
+      });
     
     
       reportSheet
-        .getRange(reportSheet.getLastRow() + 1, 1, rowsWithBatch.length, 21)
+        .getRange(
+          reportSheet.getLastRow() + 1,
+          1,
+          rowsWithBatch.length,
+          22
+        )
         .setValues(rowsWithBatch);
     }
 
