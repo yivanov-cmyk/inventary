@@ -657,7 +657,8 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
             row: rowIndex + 1,
             qty: fiz,
             status: finalStatus,
-            comment: comment
+            comment: comment,
+            batchId: batchId
           });
       
       
@@ -726,8 +727,9 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     
       reportSheet.getRange(update.row, 15)
         .setValue(update.comment);
-    
-    
+      reportSheet.getRange(update.row, 22)
+        .setValue(update.batchId);
+          
     });
 
     // 3. Dodanie nowych wierszy do Raportu
