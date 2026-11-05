@@ -390,25 +390,24 @@
       function finalSync() {
           const btn = document.getElementById('sync-btn');
           if (btn.disabled) return;
+      
+      
           btn.disabled = true;
-
+      
+      
           if (globalTimer) clearInterval(globalTimer);
+      
+      
           let seconds = 0;
           btn.innerText = "ZAPISYWANIE... (0s)";
-          btn.style.background = "#f59e0b"; // Pomarańczowy na start
-
+      
+      
           globalTimer = setInterval(() => {
               seconds++;
-              if (seconds < 15) btn.innerText = `ZAPISYWANIE... (${seconds}s)`;
-              else if (seconds < 35) {
-                  btn.innerText = `GENEROWANIE ZADAŃ... (${seconds}s)`;
-                  btn.style.background = "#3b82f6"; // Niebieski podczas procesów Mastera
-              } else {
-                  btn.innerText = `KOŃCZENIE... (${seconds}s)`;
-                  btn.style.background = "#8b5cf6"; // Fioletowy przy finalizacji
-              }
+              btn.innerText = ZAPISYWANIE... (${seconds}s);
           }, 1000);
-
+      
+      
           const tasksWithTeam = tasks.map(t => ({
               loc: String(t.loc),
               sku: String(t.sku),
@@ -418,68 +417,60 @@
               masterRow: parseInt(t.masterRow) || 0,
               comment: String(t.comment || "")
           }));
-
-          // Zwiększamy Watchdog do 60s, bo 160 zadań + rozbieżności to dużo operacji
+      
+      
+          let batchId = localStorage.getItem("inventory_batch_id");
+      
+      
+          if (!batchId) {
+              batchId = crypto.randomUUID();
+              localStorage.setItem("inventory_batch_id", batchId);
+          }
+      
+      
           let syncCompleted = false;
+      
+      
           const syncTimeout = setTimeout(() => {
               if (!syncCompleted) {
-                  handleSyncError(tasksWithTeam, btn, "SERWER PRZECIĄŻONY - SPRAWDŹ ARKUSZ");
+                  clearInterval(globalTimer);
+                  btn.innerText = "OCZEKIWANIE NA SERWER...";
               }
           }, 60000);
-          let batchId = localStorage.getItem("inventory_batch_id");
-
-
-          if (!batchId) {
-            batchId = crypto.randomUUID();
-            localStorage.setItem("inventory_batch_id", batchId);
-          }
+      
+      
           google.script.run
               .withSuccessHandler(function(res) {
-                  syncCompleted = true; 
+                  syncCompleted = true;
                   clearTimeout(syncTimeout);
-                  
+                  clearInterval(globalTimer);
+      
+      
                   if (res && res.success) {
-
-
                       if (res.hasNewTasks) {
-                        finalizeSuccess(res, btn);
+                          finalizeSuccess(res, btn);
                       } else {
-                        clearInterval(globalTimer);
-                        showEndOfWork();
-                      }
-                    
-                    
-                    } else {
-                      handleSyncError(
-                        tasksWithTeam,
-                        btn,
-                        res ? res.msg : "Błąd krytyczny"
-                      );
-                    }
-                      // JEŚLI NIE MA ZADAŃ - DAJEMY SERWEROWI OSTATNIĄ SZANSĘ (5 SEKUND)
-                      else {
-                          btn.innerText = "WERYFIKACJA KOŃCOWA...";
-                          setTimeout(() => {
-                              google.script.run
-                                  .withSuccessHandler(function(retryRes) {
-                                      clearInterval(globalTimer);
-                                      if (retryRes && retryRes.hasTasks) { // Sprawdzamy nową funkcją w GAS
-                                          finalizeSuccess(retryRes, btn);
-                                      } else {
-                                          showEndOfWork();
-                                      }
-                                  })
-                                  .getInitialDataForLoop(teamName); // Szybkie sprawdzenie czy coś wpadło
-                          }, 5000);
+                          showEndOfWork();
                       }
                   } else {
-                      handleSyncError(tasksWithTeam, btn, res ? res.msg : "Błąd krytyczny");
+                      handleSyncError(
+                          tasksWithTeam,
+                          btn,
+                          res ? res.msg : "Błąd krytyczny"
+                      );
                   }
               })
               .withFailureHandler(function(e) {
                   syncCompleted = true;
                   clearTimeout(syncTimeout);
-                  handleSyncError(tasksWithTeam, btn, "BŁĄD POŁĄCZENIA (WiFi?)");
+                  clearInterval(globalTimer);
+      
+      
+                  handleSyncError(
+                      tasksWithTeam,
+                      btn,
+                      "BŁĄD POŁĄCZENIA (WiFi?)"
+                  );
               })
               .saveAllTasks(teamName, tasksWithTeam, startTime, batchId);
       }
