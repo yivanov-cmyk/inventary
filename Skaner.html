@@ -133,7 +133,11 @@
               startTime = localStorage.getItem('inventory_start') || "";
               showWorkScreen();
             } else {
-              localStorage.clear();
+              Swal.fire({
+                icon: 'warning',
+                title: 'Dane zostały zachowane',
+                text: 'Niezapisane wyniki nadal znajdują się w pamięci skanera. Możesz przywrócić je po odświeżeniu strony.'
+              });
             }
           });
         }
@@ -435,10 +439,23 @@
                   clearTimeout(syncTimeout);
                   
                   if (res && res.success) {
-                      // JEŚLI MAMY NOWE ZADANIA - ŁADUJEMY
+
+
                       if (res.hasNewTasks) {
-                          finalizeSuccess(res, btn);
-                      } 
+                        finalizeSuccess(res, btn);
+                      } else {
+                        clearInterval(globalTimer);
+                        showEndOfWork();
+                      }
+                    
+                    
+                    } else {
+                      handleSyncError(
+                        tasksWithTeam,
+                        btn,
+                        res ? res.msg : "Błąd krytyczny"
+                      );
+                    }
                       // JEŚLI NIE MA ZADAŃ - DAJEMY SERWEROWI OSTATNIĄ SZANSĘ (5 SEKUND)
                       else {
                           btn.innerText = "WERYFIKACJA KOŃCOWA...";
@@ -487,7 +504,12 @@
       }
 
       function showEndOfWork() {
-          localStorage.clear();
+          localStorage.removeItem('inventory_tasks');
+          localStorage.removeItem('inventory_team');
+          localStorage.removeItem('inventory_index');
+          localStorage.removeItem('inventory_start');
+          localStorage.removeItem('backup_tasks');
+          localStorage.removeItem('inventory_batch_id');
           const workScreen = document.getElementById('work-screen');
           workScreen.innerHTML = `
               <div style="padding: 20px; text-align: center;">
