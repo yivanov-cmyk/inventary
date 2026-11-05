@@ -159,6 +159,23 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({"success": false, "error": err.message})).setMimeType(ContentService.MimeType.JSON);
   }
 }
+function updateInventoryBatchStatus(sheet, batchId, status) {
+  const batch = findInventoryBatch(sheet, batchId);
+
+
+  if (!batch) {
+    throw new Error("Nie znaleziono partii: " + batchId);
+  }
+
+
+  sheet.getRange(batch.row, 3, 1, 2).setValues([[
+    status,
+    new Date()
+  ]]);
+
+
+  SpreadsheetApp.flush();
+}
 function emergencyForceSaveTeam() {
   const TEAM_TO_SAVE = "Ekipa_6";  
   
@@ -176,7 +193,63 @@ function emergencyForceSaveTeam() {
   }
 
   const currentTasks = teamSheet.getRange(2, 1, lastRow - 1, 11).getValues();
+  if (!Array.isArray(allTasks)) {
+    throw new Error("Nieprawidłowe dane skanera");
+  }
   
+  
+  if (allTasks.length !== currentTasks.length) {
+    throw new Error(
+      "Niezgodna liczba zadań. Skaner: " +
+      allTasks.length +
+      ", arkusz: " +
+      currentTasks.length
+    );
+  }
+  
+  
+  const sentTasks = new Map();
+  
+  
+  allTasks.forEach(t => {
+    const key = JSON.stringify([
+      String(t.loc),
+      String(t.sku),
+      Number(t.masterRow)
+    ]);
+  
+  
+    if (sentTasks.has(key)) {
+      throw new Error("Duplikat zadania: " + t.loc);
+    }
+  
+  
+    if (
+      t.qty === "" ||
+      t.qty === null ||
+      t.qty === undefined ||
+      !Number.isFinite(Number(String(t.qty).replace(",", ".")))
+    ) {
+      throw new Error("Brak lub błędna ilość: " + t.loc);
+    }
+  
+  
+    sentTasks.set(key, t);
+  });
+  
+  
+  currentTasks.forEach(row => {
+    const key = JSON.stringify([
+      String(row[0]),
+      String(row[1]),
+      Number(row[9])
+    ]);
+  
+  
+    if (!sentTasks.has(key)) {
+      throw new Error("Brak wyniku: " + row[0]);
+    }
+  });
   const allTasksMapped = currentTasks.map(row => {
     return {
       loc: String(row[0]),
@@ -584,20 +657,42 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       reportSheet.getRange(reportSheet.getLastRow() + 1, 1, newReportEntries.length, 20).setValues(newReportEntries);
     }
 
+    // Raport i Master zostały zapisane
+    SpreadsheetApp.flush();
+    
+    
+    updateInventoryBatchStatus(
+      syncLog,
+      batchId,
+      "REPORT_SAVED"
+    );
+    
+    
     // Czyszczenie i nowa paczka
-    teamSheet.getRange("A2:K").clearContent(); 
+    teamSheet.getRange("A2:K").clearContent()
     SpreadsheetApp.flush(); // Wymuś zapis przed sync
     
     syncAndGetNewData(teamName);
-    const nextData = getInitialDataForLoop(teamName); 
-    const batchRecord = findInventoryBatch(syncLog, batchId);
 
 
-    syncLog.getRange(batchRecord.row, 3, 1, 2)
-      .setValues([["DONE", new Date()]]);
-    
-    
     SpreadsheetApp.flush();
+    
+    
+    updateInventoryBatchStatus(
+      syncLog,
+      batchId,
+      "TASKS_ASSIGNED"
+    );
+    
+    
+    const nextData = getInitialDataForLoop(teamName);
+
+
+    updateInventoryBatchStatus(
+      syncLog,
+      batchId,
+      "DONE"
+    );
     if (lock.hasLock()) lock.releaseLock();
     return { success: true, hasNewTasks: nextData.tasks.length > 0, newData: nextData };
 
