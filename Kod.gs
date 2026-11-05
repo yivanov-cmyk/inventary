@@ -698,7 +698,7 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
           
       
       
-        }
+        
       
       
       } else {
