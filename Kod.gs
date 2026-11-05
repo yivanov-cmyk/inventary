@@ -372,7 +372,7 @@ function saveAllTasks(teamName, allTasks, startTime) {
     
     let newReportEntries = [];
     let reportUpdates = [];
-    let reportWasModified = false;
+    //let reportWasModified = false;
 
     currentTasks.forEach(row => {
       const loc = String(row[0]);
@@ -380,7 +380,11 @@ function saveAllTasks(teamName, allTasks, startTime) {
       const sys = toNum(row[3]);
       const type = row[4]; 
       const masterRowIdx = parseInt(row[9]); 
-      const match = allTasks.find(t => String(t.loc) === loc);
+      const match = allTasks.find(t =>
+        String(t.loc) === loc &&
+        String(t.sku) === sku &&
+        Number(t.masterRow) === masterRowIdx
+      );
       const fiz = match ? toNum(match.qty) : 0;
       const comment = match ? match.comment : "";
 
