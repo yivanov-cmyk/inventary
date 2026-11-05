@@ -385,6 +385,11 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     
       if (existingBatch.status === "DONE") {
         const nextData = getInitialDataForLoop(teamName);
+      
+      
+        if (lock.hasLock()) {
+          lock.releaseLock();
+        }
     
     
         return {
