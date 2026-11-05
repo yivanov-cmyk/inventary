@@ -716,20 +716,18 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     
 
     reportUpdates.forEach(update => {
+      // H:V — обновляем результат и BatchId вместе
+      const range = reportSheet.getRange(update.row, 8, 1, 15);
+      const values = range.getValues()[0];
     
     
-      reportSheet.getRange(update.row, 8, 1, 2)
-        .setValues([[
-          update.qty,
-          update.status
-        ]]);
+      values[0] = update.qty;      // H: 2. Liczenie
+      values[1] = update.status;   // I: Status
+      values[7] = update.comment;  // O: Komentarz2
+      values[14] = update.batchId; // V: BatchId 2. liczenia
     
     
-      reportSheet.getRange(update.row, 15)
-        .setValue(update.comment);
-      reportSheet.getRange(update.row, 22)
-        .setValue(update.batchId);
-          
+      range.setValues([values]);
     });
 
     // 3. Dodanie nowych wierszy do Raportu
