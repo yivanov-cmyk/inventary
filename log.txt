@@ -1,0 +1,139 @@
+14:34:28	Uwaga	Rozpoczęto wykonywanie
+14:34:51	Informacje	Ekipa_1: OK | 13.076s | 
+14:35:04	Informacje	Ekipa_2: OK | 12.497s | 
+14:35:18	Informacje	Ekipa_3: OK | 13.614s | 
+14:35:33	Informacje	Ekipa_4: OK | 14.163s | 
+14:35:47	Informacje	Ekipa_5: OK | 13.953s | 
+14:36:02	Informacje	Ekipa_6: OK | 14.151s | 
+14:36:14	Informacje	Ekipa_7: OK | 12.009s | 
+14:36:27	Informacje	Ekipa_8: OK | 11.287s | 
+14:36:41	Informacje	Ekipa_9: OK | 13.878s | 
+14:36:55	Informacje	Ekipa_10: OK | 13.443s | 
+14:37:08	Informacje	Ekipa_11: OK | 12.893s | 
+14:37:25	Informacje	Ekipa_12: OK | 16.445s | 
+14:37:40	Informacje	Ekipa_13: OK | 14.726s | 
+14:37:54	Informacje	Ekipa_14: OK | 13.483s | 
+14:38:07	Informacje	Ekipa_15: OK | 12.874s | 
+14:38:07	Informacje	[
+  {
+    "team": "Ekipa_1",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 13.076,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_1",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_2",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 12.497,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_2",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_3",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 13.614,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_3",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_4",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 14.163,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_4",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_5",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 13.953,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_5",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_6",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 14.151,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_6",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_7",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 12.009,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_7",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_8",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 11.287,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_8",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_9",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 13.878,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_9",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_10",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 13.443,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_10",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_11",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 12.893,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_11",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_12",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 16.445,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_12",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_13",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 14.726,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_13",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_14",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 13.483,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_14",
+    "message": ""
+  },
+  {
+    "team": "Ekipa_15",
+    "prepared": 170,
+    "status": "OK",
+    "seconds": 12.874,
+    "batchId": "LOADTEST-b502d3a1-Ekipa_15",
+    "message": ""
+  }
+]
+14:38:07	Uwaga	Ukończono wykonywanie
