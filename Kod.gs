@@ -900,7 +900,12 @@ function syncAndGetNewData(manualTeamName, alreadyLocked = false) {
       lock.waitLock(50000); 
     }
     const lastRowMaster = masterSheet.getLastRow();
-    if (lastRowMaster < 2) { if(lock.hasLock()) lock.releaseLock(); return; }
+    if (lastRowMaster < 2) { if(lock.hasLock()) lock.releaseLock(); return; }if (lastRowMaster < 2) {
+      if (!alreadyLocked && lock.hasLock()) {
+        lock.releaseLock();
+      }
+      return;
+    }
 
     const masterRange = masterSheet.getRange(2, 1, lastRowMaster - 1, 15);
     const masterData = masterRange.getValues();
@@ -1082,8 +1087,16 @@ function syncAndGetNewData(manualTeamName, alreadyLocked = false) {
     }
 
   } catch (e) {
-    if (lock && lock.hasLock()) lock.releaseLock();
-    console.error("Błąd sync: " + e.message); 
+  if (!alreadyLocked && lock.hasLock()) {
+    lock.releaseLock();
+  }
+
+
+  console.error("Błąd sync: " + e.message);
+
+
+  if (alreadyLocked) {
+    throw e;
   }
 }
 
