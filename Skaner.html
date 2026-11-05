@@ -792,31 +792,24 @@
 
         google.script.run
           .withSuccessHandler(function(res) {
-            // 3. Zatrzymanie licznika
-            clearInterval(globalTimer); 
-            
-            if (res.success && res.hasNewTasks) {
-              alert("Zapisano pomyślnie (" + seconds + "s). Ładowanie kolejnej paczki...");
-              
-              tasks = res.newData.tasks;
-              teamName = res.newData.team;
-              startTime = res.newData.startTime;
-              currentIndex = 0;
-              
-              // 4. Pełny reset interfejsu
-              document.getElementById('sync-btn').style.display = 'none';
-              document.getElementById('sync-btn').disabled = false; // Odblokowanie na przyszłość
-              document.getElementById('next-btn').style.display = 'block';
-              document.getElementById('input-qty').style.display = 'block';
-              document.getElementById('display-batch').parentElement.style.display = 'inline-block';
-              
-              saveToLocalStorage();
-              renderTask();
-            } else {
-              alert("Inwentaryzacja zakończona (Czas: " + seconds + "s).");
-              localStorage.clear();
-              location.reload();
-            }
+              syncCompleted = true;
+              clearTimeout(syncTimeout);
+              clearInterval(globalTimer);
+      
+      
+              if (res && res.success) {
+                  if (res.hasNewTasks) {
+                      finalizeSuccess(res, btn);
+                  } else {
+                      showEndOfWork();
+                  }
+              } else {
+                  handleSyncError(
+                      tasksWithTeam,
+                      btn,
+                      res ? res.msg : "Błąd krytyczny"
+                  );
+              }
           })
           .withFailureHandler(function(e) {
             clearInterval(globalTimer);
