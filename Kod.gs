@@ -443,7 +443,7 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     const teamSheet = SS.getSheetByName(teamName);
     const lastRow = teamSheet.getLastRow();
     if (lastRow < 2) {
-      if (!alreadyLocked && lock.hasLock()) {
+      if (lock.hasLock()) {
         lock.releaseLock();
       }
       return { success: true, msg: "Brak danych." };
@@ -706,7 +706,7 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       batchId,
       "DONE"
     );
-    if (!alreadyLocked && lock.hasLock()) {
+    if (lock.hasLock()) {
       lock.releaseLock();
     }
     return { success: true, hasNewTasks: nextData.tasks.length > 0, newData: nextData };
