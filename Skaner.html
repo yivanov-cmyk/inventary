@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+      body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #000; color: #fff; display: flex; justify-content: center; }
+      .app-container { width: 100%; max-width: 400px; padding: 15px; box-sizing: border-box; }
+      .card { background: #1a1a1a; border-radius: 15px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid #333; }
+      h2 { margin-top: 0; color: #3b82f6; }
+      .loc-label { color: #4ade80; font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
+      .batch-box { color: #fbbf24; font-size: 0.9rem; font-weight: bold; margin-bottom: 10px; background: #2d240a; padding: 5px; border-radius: 5px; display: inline-block; }
+      .sku-label { font-size: 1.6rem; font-weight: 800; margin-bottom: 15px; letter-spacing: 1px; word-break: break-all; }
+      input { width: 100%; padding: 15px; background: #262626; border: 2px solid #444; color: #fff; font-size: 1.8rem; text-align: center; border-radius: 10px; margin-bottom: 15px; box-sizing: border-box; transition: 0.2s; }
+      input:focus { border-color: #3b82f6; outline: none; background: #333; }
+      #input-comment { font-size: 1.1rem; padding: 12px; margin-bottom: 10px; border-style: dashed; }
+      button { width: 100%; padding: 18px; border-radius: 10px; border: none; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin-bottom: 10px; }
+      button:active { transform: scale(0.98); }
+      .btn-next { background: #3b82f6; color: white; }
+      .btn-sync { background: #ef4444; color: white; margin-top: 15px; display: none; }
+      .btn-comment-toggle { background: transparent; color: #888; border: 1px solid #444; font-size: 0.8rem; padding: 8px; }
+      .progress { color: #666; margin-top: 15px; font-size: 0.85rem; border-top: 1px solid #333; padding-top: 10px; }
+      .error-msg { color: #ef4444; font-size: 0.9rem; margin-bottom: 10px; display: none; }
+      .partial-alert { background: #dc2626; animation: blinker 1.5s linear infinite; color: white; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 1rem; margin-bottom: 10px; }
+      @keyframes blinker { 50% { opacity: 0.6; } }
+      #login-screen { display: block; }
+      #work-screen { display: none; }
+      #comment-section { display: none; }
+      .pallet-kind-label { 
+        display: block; 
+        color: #3b82f6; 
+        font-size: 0.9rem; 
+        font-weight: bold; 
+        margin-top: 5px; 
+        text-transform: uppercase;
+      }
+      .loc-line {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #fff; /* Całość biała */
+        background: #000;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #333;
+        text-align: center;
+        letter-spacing: 1px;
+      }
+
+      .lvl-highlight {
+        background: #2563eb; /* Niebieski kwadrat */
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin: 0 2px;
+        box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+      }
+      .second-count-mode {
+        border: 2px solid #f59e0b !important; /* Delikatny pomarańczowy obrys karty */
+      }
+
+      .count-badge {
+        font-size: 0.75rem;
+        font-weight: bold;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        display: inline-block;
+        text-transform: uppercase;
+      }
+      .swal2-popup {
+        background: #1a1a1a !important;
+        color: #fff !important;
+        border: 1px solid #333 !important;
+        border-radius: 15px !important;
+      }
+      .swal2-title, .swal2-html-container {
+        color: #fff !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      <div id="login-screen" class="card">
+        <h2>INWENTARYZACJA</h2>
+        <div id="login-error" class="error-msg">Błędny kod lub brak połączenia</div>
+        <input type="password" id="pass" placeholder="KOD EKIPY" inputmode="text">
+        <button class="btn-next" id="login-btn" onclick="login()">ZALOGUJ</button>
+      </div>
+
+      <div id="work-screen" class="card">
+        <div id="pallet-status"></div>
+        <div class="loc-line" id="display-loc">
+        </div>
+        <div style="font-size: 0.7rem; color: #888; margin-bottom: 2px;">BATCH | TYP PALETY</div>
+        <div class="batch-box"><span id="display-batch">---</span></div>
+        <div class="sku-label" id="display-sku">SKU...</div>
+        <input type="number" id="input-qty" placeholder="ILOŚĆ" inputmode="numeric" onkeydown="handleEnter(event)">
+        <div id="comment-section" style="display: block;"> <input type="text" id="input-comment" placeholder="KOMENTARZ" onkeydown="handleEnter(event)"></div>
+        <button class="btn-comment-toggle" id="comment-toggle-btn" onclick="toggleComment()">+ DODAJ KOMENTARZ</button>
+        <button class="btn-next" id="next-btn" onclick="submitStep()">NASTĘPNY (Enter)</button>
+        <button class="btn-sync" id="sync-btn" onclick="finalSync()">WYŚLIJ I ZAKOŃCZ</button>
+        <div class="progress" id="display-progress">Wiersz 0 z 0</div>
+      </div>
+    </div>
+
+    <script>
+      let tasks = [];
+      let currentIndex = 0;
+      let teamName = "";
+      let startTime = "";
+
+      window.onload = function() { checkRecovery(); };
+
+      function checkRecovery() {
+        const savedTasks = localStorage.getItem('inventory_tasks');
+        const savedTeam = localStorage.getItem('inventory_team');
+        if (savedTasks && savedTeam) {
+          Swal.fire({
+            title: 'Przywrócić dane?',
+            text: "Znaleziono niezapisaną pracę ekipy: " + savedTeam,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#3b82f6',
+            cancelButtonColor: '#ef4444',
+            confirmButtonText: 'Tak, przywróć',
+            cancelButtonText: 'Nie, usuń'
+          }).then((result) => {
+            if (result.isConfirmed) {
+              tasks = JSON.parse(savedTasks);
+              teamName = savedTeam;
+              currentIndex = parseInt(localStorage.getItem('inventory_index')) || 0;
+              startTime = localStorage.getItem('inventory_start') || "";
+              showWorkScreen();
+            } else {
+              localStorage.clear();
+            }
+          });
+        }
+      }
+      function login() {
+          const pass = document.getElementById('pass').value;
+          const btn = document.getElementById('login-btn');
+          
+          if(!pass) return;
+          
+          btn.disabled = true; 
+          btn.innerText = "ŁĄCZENIE...";
+          
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.tasks && res.tasks.length > 0) {
+                teamName = res.team; 
+                tasks = res.tasks; 
+                startTime = res.startTime;
+                currentIndex = 0; 
+                
+                saveToLocalStorage(); 
+                showWorkScreen();
+                
+                
+              } else {
+                btn.disabled = false; 
+                btn.innerText = "ZALOGUJ";
+                document.getElementById('login-error').style.display = 'block';
+              }
+            })
+            .withFailureHandler(function(e) {
+              btn.disabled = false; 
+              btn.innerText = "ZALOGUJ"; 
+              alert("Błąd połączenia: " + e.message);
+            })
+            .getInitialData(pass);
+      }
+      function zlogin() {
+        const pass = document.getElementById('pass').value;
+        const btn = document.getElementById('login-btn');
+        if(!pass) return;
+        btn.disabled = true; btn.innerText = "ŁĄCZENIE...";
+        google.script.run
+          .withSuccessHandler(function(res) {
+            if (res && res.tasks && res.tasks.length > 0) {
+              teamName = res.team; tasks = res.tasks; startTime = res.startTime;
+              currentIndex = 0; saveToLocalStorage(); showWorkScreen();
+              var signalUrl = "http://10.149.250.220:8888/register-scanner-pixel?team=" + encodeURIComponent(teamName) + "&event=LOGIN";
+              var win = window.open(signalUrl, '_blank');
+              
+              setTimeout(function() { if(win) win.close(); }, 1000);
+            } else {
+              btn.disabled = false; btn.innerText = "ZALOGUJ";
+              document.getElementById('login-error').style.display = 'block';
+            }
+          })
+          .withFailureHandler(function(e) {
+            btn.disabled = false; btn.innerText = "ZALOGUJ"; alert("Błąd: " + e.message);
+          })
+          .getInitialData(pass);
+      }
+      function loginTeam() {
+          teamName = document.getElementById('team-input').value;
+          if (!teamName) return alert("Wpisz nazwę ekipy!");
+
+          // Sygnał do Pythona, że skaner jest aktywny
+          
+
+          // Dalej Twoja logika logowania do Google...
+          alert("Zalogowano pomyślnie!");
+      }
+      function showWorkScreen() {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('work-screen').style.display = 'block';
+        renderTask();
+      }
+
+      function handleEnter(e) { if (e.key === 'Enter') { e.preventDefault(); submitStep(); } }
+
+      function toggleComment() {
+        const sect = document.getElementById('comment-section');
+        const btn = document.getElementById('comment-toggle-btn');
+        if (sect.style.display === 'none' || sect.style.display === '') {
+          sect.style.display = 'block'; btn.innerText = "- UKRYJ KOMENTARZ"; document.getElementById('input-comment').focus();
+        } else { sect.style.display = 'none'; btn.innerText = "+ DODAJ KOMENTARZ"; }
+      }
+
+      function saveToLocalStorage() {
+        localStorage.setItem('inventory_tasks', JSON.stringify(tasks));
+        localStorage.setItem('inventory_team', teamName);
+        localStorage.setItem('inventory_index', currentIndex);
+        localStorage.setItem('inventory_start', startTime);
+      }
+      
+      function renderTask() {
+        if (currentIndex < tasks.length) {
+          const t = tasks[currentIndex];
+          const card = document.getElementById('work-screen'); // Używamy Twojego ID
+          const statusDiv = document.getElementById('pallet-status');
+
+          // PRZYWRACANIE WIDOCZNOŚCI ELEMENTÓW (Używamy ID, które masz w HTML)
+          if (card) card.style.display = 'block';
+          document.getElementById('input-qty').style.display = 'block';
+          document.getElementById('next-btn').style.display = 'block';
+          document.getElementById('sync-btn').style.display = 'none';
+          const commentBtn = document.getElementById('comment-toggle-btn');
+          if (commentBtn) {
+              commentBtn.style.display = 'block';
+              commentBtn.innerText = "+ DODAJ KOMENTARZ";
+          }
+          document.getElementById('input-comment').value = ""; // Czyści stary komentarz [cite: 328]
+          // Jeśli chcesz, aby pole było zawsze widoczne od razu:
+          document.getElementById('comment-section').style.display = 'block';
+          // Przywracamy widoczność Batch Box (rodzica)
+          const batchBox = document.getElementById('display-batch').parentElement;
+          if (batchBox) batchBox.style.display = 'inline-block';
+
+          const fullLoc = String(t.loc);
+          
+          // STYLIZACJA 1L / 2L
+          if (t.info === "2. LICZENIE") {
+            card.classList.add('second-count-mode');
+            statusDiv.innerHTML = '<div class="count-badge" style="background: #f59e0b; color: #000;">2. LICZENIE</div>';
+          } else {
+            card.classList.remove('second-count-mode');
+            statusDiv.innerHTML = '<div class="count-badge" style="background: #3b82f6; color: #fff;">1. LICZENIE</div>';
+          }
+          statusDiv.style.display = 'block';
+
+          // FORMATOWANIE LOKALIZACJI
+          let highlightedLoc = fullLoc;
+          if (fullLoc.includes('.') && fullLoc.length >= 9) {
+            const prefix = fullLoc.substring(0, 8); 
+            const level = fullLoc.substring(8, 10);
+            const suffix = fullLoc.substring(10);
+            highlightedLoc = `${prefix}<span class="lvl-highlight">${level}</span>${suffix}`;
+          }
+          document.getElementById('display-loc').innerHTML = highlightedLoc;
+          document.getElementById('display-sku').innerText = t.sku;
+          
+          // BATCH I TYP PALETY
+          const palletInfo = t.palletKind || "???";
+          document.getElementById('display-batch').innerHTML = `${t.batch || "BRAK"} | <span style="color: #60a5fa;">${palletInfo}</span>`;
+
+          // RESET PÓL
+          document.getElementById('input-qty').value = "";
+          document.getElementById('input-comment').value = "";
+          document.getElementById('display-progress').innerText = `Wiersz ${currentIndex + 1} z ${tasks.length}`;
+          
+          setTimeout(() => { document.getElementById('input-qty').focus(); }, 200);
+        } else { 
+          showFinishScreen(); 
+        }
+      }
+      function zrenderTask() {
+        if (currentIndex < tasks.length) {
+          const t = tasks[currentIndex];
+          
+          // TA LINIA BYŁA BRAKUJĄCA - Definiujemy zmienną card
+          const card = document.querySelector('.card'); 
+          
+          const statusDiv = document.getElementById('pallet-status');
+          document.getElementById('task-container').style.display = 'block';
+          document.getElementById('input-qty').style.display = 'block';
+          document.getElementById('next-btn').style.display = 'block';
+          document.getElementById('sync-btn').style.display = 'none';
+          const fullLoc = String(t.loc);
+          
+          // --- ROZDZIELENIE ETAPÓW (STYLIZACJA) ---
+          if (t.info === "2. LICZENIE") {
+            card.classList.add('second-count-mode');
+            statusDiv.innerHTML = '<div class="count-badge" style="background: #f59e0b; color: #000; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; display: inline-block;">2. LICZENIE</div>';
+            statusDiv.style.display = 'block';
+          } else {
+            card.classList.remove('second-count-mode');
+            statusDiv.innerHTML = '<div class="count-badge" style="background: #3b82f6; color: #fff; font-weight: bold; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; display: inline-block;">1. LICZENIE</div>';
+            statusDiv.style.display = 'block';
+          }
+
+          let highlightedLoc = fullLoc;
+          if (fullLoc.includes('.') && fullLoc.length >= 9) {
+            const prefix = fullLoc.substring(0, 8); 
+            const level = fullLoc.substring(8, 10);
+            const suffix = fullLoc.substring(10);
+            highlightedLoc = `${prefix}<span class="lvl-highlight">${level}</span>${suffix}`;
+          }
+          document.getElementById('display-loc').innerHTML = highlightedLoc;
+
+          document.getElementById('display-sku').innerText = t.sku;
+          const palletInfo = t.palletKind || "???";
+          document.getElementById('display-batch').innerHTML = `${t.batch || "BRAK"} | <span style="color: #60a5fa;">${palletInfo}</span>`;
+
+          if (t.isFull === false && t.info !== "2. LICZENIE") {
+            statusDiv.innerHTML += '<div class="partial-alert">⚠️ PALETA NIEPEŁNA!</div>';
+          }
+
+          document.getElementById('input-qty').value = "";
+          document.getElementById('input-comment').value = "";
+          
+          document.getElementById('input-comment').onkeydown = handleEnter; 
+
+          document.getElementById('display-progress').innerText = `Wiersz ${currentIndex + 1} z ${tasks.length}`;
+          
+          setTimeout(() => { document.getElementById('input-qty').focus(); }, 200);
+        } else { 
+          showFinishScreen(); 
+        }
+      }
+
+      function submitStep() {
+        const qty = document.getElementById('input-qty').value;
+        if (qty === ""){ 
+          Swal.fire({
+            icon: 'warning',
+            title: 'Brak ilości',
+            text: 'Proszę wpisać zliczoną ilość!',
+            timer: 2000,
+            showConfirmButton: false
+          });
+        }
+        tasks[currentIndex].qty = qty;
+        tasks[currentIndex].comment = document.getElementById('input-comment').value;
+        currentIndex++; saveToLocalStorage(); renderTask();
+      }
+
+      function showFinishScreen() {
+          document.getElementById('display-loc').innerText = "KONIEC LISTY";
+          // Ukrywamy kontener partii
+          document.getElementById('display-batch').parentElement.style.display = 'none';
+          document.getElementById('display-sku').innerText = "Wszystkie pozycje gotowe";
+          
+          // Ukrywamy elementy wprowadzania
+          document.getElementById('input-qty').style.display = 'none';
+          document.getElementById('input-comment').style.display = 'none'; // Na wszelki wypadek
+          document.getElementById('comment-toggle-btn').style.display = 'none';
+          
+          // Nawigacja
+          document.getElementById('next-btn').style.display = 'none';
+          document.getElementById('sync-btn').style.display = 'block';
+          
+          // Opcjonalnie: focus na przycisk wysyłki, żeby ekipa mogła kliknąć Enterem
+          document.getElementById('sync-btn').focus();
+      }
+
+      let globalTimer; 
+      /**
+ * ODBIERANIE DANYCH Z PYTHONA
+ */
+      function finalSync() {
+          const btn = document.getElementById('sync-btn');
+          if (btn.disabled) return;
+          btn.disabled = true;
+
+          if (globalTimer) clearInterval(globalTimer);
+          let seconds = 0;
+          btn.innerText = "ZAPISYWANIE... (0s)";
+          btn.style.background = "#f59e0b"; // Pomarańczowy na start
+
+          globalTimer = setInterval(() => {
+              seconds++;
+              if (seconds < 15) btn.innerText = `ZAPISYWANIE... (${seconds}s)`;
+              else if (seconds < 35) {
+                  btn.innerText = `GENEROWANIE ZADAŃ... (${seconds}s)`;
+                  btn.style.background = "#3b82f6"; // Niebieski podczas procesów Mastera
+              } else {
+                  btn.innerText = `KOŃCZENIE... (${seconds}s)`;
+                  btn.style.background = "#8b5cf6"; // Fioletowy przy finalizacji
+              }
+          }, 1000);
+
+          const tasksWithTeam = tasks.map(t => ({
+              loc: String(t.loc),
+              sku: String(t.sku),
+              qty: String(t.qty),
+              sysQty: t.sysQty || 0,
+              team: teamName,
+              masterRow: parseInt(t.masterRow) || 0,
+              comment: String(t.comment || "")
+          }));
+
+          // Zwiększamy Watchdog do 60s, bo 160 zadań + rozbieżności to dużo operacji
+          let syncCompleted = false;
+          const syncTimeout = setTimeout(() => {
+              if (!syncCompleted) {
+                  handleSyncError(tasksWithTeam, btn, "SERWER PRZECIĄŻONY - SPRAWDŹ ARKUSZ");
+              }
+          }, 60000);
+
+          google.script.run
+              .withSuccessHandler(function(res) {
+                  syncCompleted = true; 
+                  clearTimeout(syncTimeout);
+                  
+                  if (res && res.success) {
+                      // JEŚLI MAMY NOWE ZADANIA - ŁADUJEMY
+                      if (res.hasNewTasks) {
+                          finalizeSuccess(res, btn);
+                      } 
+                      // JEŚLI NIE MA ZADAŃ - DAJEMY SERWEROWI OSTATNIĄ SZANSĘ (5 SEKUND)
+                      else {
+                          btn.innerText = "WERYFIKACJA KOŃCOWA...";
+                          setTimeout(() => {
+                              google.script.run
+                                  .withSuccessHandler(function(retryRes) {
+                                      clearInterval(globalTimer);
+                                      if (retryRes && retryRes.hasTasks) { // Sprawdzamy nową funkcją w GAS
+                                          finalizeSuccess(retryRes, btn);
+                                      } else {
+                                          showEndOfWork();
+                                      }
+                                  })
+                                  .getInitialDataForLoop(teamName); // Szybkie sprawdzenie czy coś wpadło
+                          }, 5000);
+                      }
+                  } else {
+                      handleSyncError(tasksWithTeam, btn, res ? res.msg : "Błąd krytyczny");
+                  }
+              })
+              .withFailureHandler(function(e) {
+                  syncCompleted = true;
+                  clearTimeout(syncTimeout);
+                  handleSyncError(tasksWithTeam, btn, "BŁĄD POŁĄCZENIA (WiFi?)");
+              })
+              .saveAllTasks(teamName, tasksWithTeam, startTime);
+      }
+
+      function finalizeSuccess(res, btn) {
+          localStorage.removeItem('inventory_tasks');
+          localStorage.removeItem('backup_tasks');
+          tasks = res.tasks || res.newData.tasks;
+          currentIndex = 0;
+          startTime = res.startTime || res.newData.startTime;
+          saveToLocalStorage();
+
+          btn.style.display = 'none';
+          btn.disabled = false;
+          btn.style.background = "#10b981";
+          document.getElementById('input-qty').style.display = 'block';
+          document.getElementById('input-qty').value = "";
+          document.getElementById('next-btn').style.display = 'block';
+          renderTask();
+          Swal.fire({ icon: 'success', title: 'Zsynchronizowano!', text: 'Pobrano nową paczkę', timer: 2000 });
+      }
+
+      function showEndOfWork() {
+          localStorage.clear();
+          const workScreen = document.getElementById('work-screen');
+          workScreen.innerHTML = `
+              <div style="padding: 20px; text-align: center;">
+                  <h2 style="color: #10b981;">INWENTARYZACJA ZAKOŃCZONA</h2>
+                  <p>Brak nowych zadań dla Twojej ekipy w tej strefie.</p>
+                  <button onclick="window.location.reload()" style="background:#3b82f6; color:white; padding:15px; border-radius:10px; border:none; width:100%; font-weight:bold;">
+                      ODŚWIEŻ / ZALOGUJ PONOWNIE
+                  </button>
+              </div>`;
+      }
+      function gfinalSync() {
+          const btn = document.getElementById('sync-btn');
+          if (btn.disabled) return;
+          btn.disabled = true;
+
+          // 1. UI I STOPER
+          if (globalTimer) clearInterval(globalTimer);
+          let seconds = 0;
+          btn.innerText = "ZAPISYWANIE... (0s)";
+          globalTimer = setInterval(() => {
+              seconds++;
+              btn.innerText = `PRZETWARZANIE... (${seconds}s)`;
+          }, 1000);
+
+          // 2. PRZYGOTOWANIE DANYCH
+          const tasksWithTeam = tasks.map(t => ({
+              loc: String(t.loc),
+              sku: String(t.sku),
+              qty: String(t.qty),
+              sysQty: t.sysQty || 0,
+              team: teamName,
+              batch: String(t.batch || ""),
+              comment: String(t.comment || ""),
+              info: String(t.info || ""),
+              masterRow: parseInt(t.masterRow) || 0,
+              sscc: String(t.sscc || ""),
+              bbd: String(t.bbd || "")
+          }));
+
+          // 3. SZYBKI BACKUP DO PYTHONA (TŁO)
+          // Nie czekamy na 'then' - jeśli przejdzie to super, jeśli nie, idziemy dalej
+          //fetch("http://10.149.250.220:8888/nasluchuj-skaner", {
+          //    method: 'POST',
+          //    mode: 'no-cors', // Omija błędy CORS, po prostu wysyła i zapomina
+          //    headers: { 'Content-Type': 'application/json' },
+          //    body: JSON.stringify(tasksWithTeam)
+          //}).catch(e => console.log("Python offline, ignoruję."));
+
+          // 4. KLASYCZNY ZAPIS GOOGLE (GAS)
+          let syncCompleted = false;
+          const syncTimeout = setTimeout(() => {
+              if (!syncCompleted) {
+                  console.error("Watchdog: Google nie odpowiada. Ratowanie danych...");
+                  handleSyncError(tasksWithTeam, btn, "PRZEKROCZONO CZAS OCZEKIWANIA");
+              }
+          }, 50000);
+          google.script.run
+              .withSuccessHandler(function(res) {
+                  syncCompleted = true; 
+                  clearTimeout(syncTimeout);
+                  clearInterval(globalTimer);
+                  if (res && res.success) {
+                      localStorage.removeItem('backup_tasks');
+                      if (res.hasNewTasks) {
+                          tasks = res.newData.tasks;
+                          currentIndex = 0;
+                          startTime = res.newData.startTime;
+                          saveToLocalStorage();
+
+                          btn.style.display = 'none';
+                          btn.disabled = false;
+                          document.getElementById('input-qty').style.display = 'block';
+                          document.getElementById('input-qty').value = "";
+                          document.getElementById('next-btn').style.display = 'block';
+                          renderTask();
+                          
+                          Swal.fire({ icon: 'success', title: 'Zapisano!', text: 'Pobrano nowe zadania', timer: 30000, showConfirmButton: false });
+                      } else {
+                          // SCENARIUSZ: KONIEC PRACY
+                          localStorage.clear();
+                          clearInterval(globalTimer); // Na wszelki wypadek jeszcze raz
+
+                          // Używamy work-screen, bo to ID na pewno masz w HTML
+                          const workScreen = document.getElementById('work-screen');
+                          if (workScreen) {
+                              workScreen.innerHTML = `
+                                  <div style="padding: 20px;">
+                                      <h2 style="color: #4ade80;">INWENTARYZACJA ZAKOŃCZONA</h2>
+                                      <p>Brak nowych zadań dla Twojej ekipy.</p>
+                                      <a href="https://script.google.com/a/macros/fmlogistic.com/s/AKfycbwiShWCO9BO22LOAVphZwuuG7Fd_vC-LOoP1SqzKel6SesxvgFqeRwrv_U6n1fqvK5H/exec" 
+                                        target="_top" 
+                                        style="display: block; background: #3b82f6; color: white; padding: 18px; border-radius: 10px; text-decoration: none; font-weight: bold;">
+                                        ZALOGUJ PONOWNIE
+                                      </a>
+                                  </div>
+                              `;
+                          }
+                          
+                          if (btn) btn.style.display = 'none';
+                          
+                          Swal.fire('Gotowe!', 'Wszystkie zadania wysłane.', 'success');
+                      }
+                  } else {
+                      btn.disabled = false;
+                      handleSyncError(tasksWithTeam, btn, res ? res.msg : "Błąd serwera");
+                      Swal.fire('Błąd', res ? res.msg : "Błąd serwera Google", 'error');
+                  }
+              })
+              .withFailureHandler(function(e) {
+                  clearInterval(globalTimer);
+                  syncCompleted = true;
+                  clearTimeout(syncTimeout);
+                  handleSyncError(tasksWithTeam, btn, "BŁĄD SIECI / TIMEOUT");
+                  btn.disabled = false;
+                  Swal.fire('Błąd połączenia', 'Timeout Google. Spróbuj ponownie.', 'error');
+              })
+              .saveAllTasks(teamName, tasksWithTeam, startTime);
+      }
+      function handleSyncError(data, btn, errorMsg) {
+          clearInterval(globalTimer);
+          btn.disabled = false;
+          btn.innerText = "SPRÓBUJ PONOWNIE";
+          btn.style.background = "#dc2626"; // Zmieniamy kolor na czerwony, żeby rzucał się w oczy
+          
+          // Kluczowe: Zapisujemy paczkę do pamięci, żeby jej nie zgubić
+          localStorage.setItem('backup_tasks', JSON.stringify(data));
+          
+          // Wymuszamy pokazanie interfejsu (pola ilości itp) na wypadek gdyby zniknęło
+          document.getElementById('task-container').style.display = 'block';
+          
+          Swal.fire({
+              icon: 'error',
+              title: 'Brak odpowiedzi!',
+              text: errorMsg + '. Dane są bezpieczne w pamięci skanera. Kliknij przycisk jeszcze raz.',
+              confirmButtonText: 'OK'
+          });
+      }
+      function zfinalSync() {
+          const btn = document.getElementById('sync-btn');
+          if (btn.disabled) return;
+          btn.disabled = true;
+
+          // 1. STOPER I UI
+          if (globalTimer) clearInterval(globalTimer);
+          let seconds = 0;
+          btn.innerText = "ZAPISYWANIE... (0s)";
+
+          globalTimer = setInterval(() => {
+              seconds++;
+              btn.innerText = `PRZETWARZANIE... (${seconds}s)`;
+          }, 1000);
+
+          // 2. PRZYGOTOWANIE DANYCH
+          const tasksWithTeam = tasks.map(t => ({
+              loc: t.loc,
+              sku: t.sku,
+              qty: t.qty,
+              sysQty: t.sysQty || 0,
+              team: teamName,
+              batch: t.batch || "",
+              comment: t.comment || "",
+              info: t.info || "",
+              masterRow: t.masterRow || 0,
+              sscc: t.sscc || "",
+              bbd: t.bbd || ""
+          }));
+
+          // 3. BACKUP DO PYTHONA (PRZEZ MOST WINDOW.OPEN)
+          // Zapisujemy w pamięci skanera, aby okno "bridge" mogło to pobrać
+          localStorage.setItem('pending_sync', JSON.stringify(tasksWithTeam));
+          
+          // Otwieramy most (bridge). Python obsłuży to w nowym oknie i sam je zamknie.
+          const bridgeUrl = "http://10.149.250.220:8888/bridge";
+          const win = window.open(bridgeUrl, '_blank');
+
+          // 4. GŁÓWNA WYSYŁKA DO GOOGLE
+          google.script.run
+              .withSuccessHandler(function(res) {
+                  clearInterval(globalTimer);
+                  
+                  // Jeśli Google potwierdzi, zamykamy okno mostu (jeśli jeszcze jest otwarte)
+                  if (win) win.close();
+
+                  if (res && res.success) {
+                      if (res.hasNewTasks) {
+                          // POBRANO NOWĄ PACZKĘ (np. 2. liczenie lub kolejna strefa)
+                          tasks = res.newData.tasks;
+                          currentIndex = 0;
+                          startTime = res.newData.startTime;
+                          
+                          saveToLocalStorage(); // Aktualizacja lokalnego stanu
+                          
+                          // UI Reset do stanu roboczego
+                          btn.style.display = 'none';
+                          btn.disabled = false;
+                          btn.innerText = "WYŚLIJ CAŁOŚĆ";
+                          
+                          document.getElementById('next-btn').style.display = 'block';
+                          document.getElementById('input-qty').style.display = 'block';
+                          document.getElementById('input-qty').value = "";
+                          document.getElementById('display-batch').parentElement.style.display = 'inline-block';
+                          document.getElementById('pallet-status').innerHTML = '';
+                          
+                          renderTask();
+                          Swal.fire({ 
+                              icon: 'success', 
+                              title: 'Zapisano!', 
+                              text: 'Pobrano nową paczkę zadań.', 
+                              timer: 2000, 
+                              showConfirmButton: false 
+                          });
+
+                      } else {
+                          // KONIEC ROBOTY
+                          tasks = [];
+                          currentIndex = 0;
+                          localStorage.clear(); // Czyścimy wszystko
+                          
+                          document.getElementById('task-container').innerHTML = `
+                              <div style="text-align:center; padding:20px;">
+                                  <h2 style="color:#059669;">Inwentaryzacja Zakończona!</h2>
+                                  <p>Wszystkie zadania dla Twojej strefy zostały wykonane.</p>
+                                  <button onclick="location.reload()" class="btn" style="background:#2563eb; margin-top:20px;">
+                                      Zaloguj ponownie
+                                  </button>
+                              </div>
+                          `;
+                          btn.style.display = 'none';
+                          Swal.fire('Gotowe!', 'Wszystkie zadania wysłane.', 'success');
+                      }
+                  } else {
+                      btn.disabled = false;
+                      clearInterval(globalTimer);
+                      Swal.fire('Błąd', res ? res.msg : "Błąd serwera Google", 'error');
+                  }
+              })
+              .withFailureHandler(function(e) {
+                  clearInterval(globalTimer);
+                  btn.disabled = false;
+                  btn.innerText = "PONÓW ZAPIS";
+                  // Nie zamykamy okna win, może się przydać do ręcznej diagnostyki
+                  Swal.fire('Błąd połączenia', 'Timeout lub błąd krytyczny Google. Spróbuj jeszcze raz.', 'error');
+              })
+              .saveAllTasks(teamName, tasks, startTime);
+      }
+      function orfinalSync() {
+        const btn = document.getElementById('sync-btn');
+        
+        // Zabezpieczenie przed podwójnym kliknięciem
+        if (btn.disabled && btn.innerText.includes("PRZETWARZANIE")) return;
+        btn.disabled = true;
+        
+        // 2. BEZWZGLĘDNE czyszczenie starego licznika przed startem nowego
+        if (globalTimer) clearInterval(globalTimer);
+        
+        let seconds = 0;
+        btn.innerText = "PRZETWARZANIE... (0s)";
+        btn.style.background = "#ef4444"; 
+
+        globalTimer = setInterval(() => {
+          seconds++;
+          
+          // 1. Domyślny tekst
+          let statusText = "PRZETWARZANIE";
+
+          // 2. Warunki zmieniające tekst i kolor (od najwyższego progu)
+          if (seconds >= 35) {
+            btn.style.background = "#059669"; // ZIELONY
+            statusText = "FINALIZACJA";
+          } 
+          else if (seconds >= 25) {
+            btn.style.background = "#d97706"; // POMARAŃCZOWY
+            statusText = "KOŃCZENIE ZAPISU";
+          }
+
+          // 3. JEDNORAZOWE ustawienie tekstu na samym końcu pętli
+          btn.innerText = `${statusText}... (${seconds}s)`;
+          
+        }, 1000);
+
+        google.script.run
+          .withSuccessHandler(function(res) {
+            // 3. Zatrzymanie licznika
+            clearInterval(globalTimer); 
+            
+            if (res.success && res.hasNewTasks) {
+              alert("Zapisano pomyślnie (" + seconds + "s). Ładowanie kolejnej paczki...");
+              
+              tasks = res.newData.tasks;
+              teamName = res.newData.team;
+              startTime = res.newData.startTime;
+              currentIndex = 0;
+              
+              // 4. Pełny reset interfejsu
+              document.getElementById('sync-btn').style.display = 'none';
+              document.getElementById('sync-btn').disabled = false; // Odblokowanie na przyszłość
+              document.getElementById('next-btn').style.display = 'block';
+              document.getElementById('input-qty').style.display = 'block';
+              document.getElementById('display-batch').parentElement.style.display = 'inline-block';
+              
+              saveToLocalStorage();
+              renderTask();
+            } else {
+              alert("Inwentaryzacja zakończona (Czas: " + seconds + "s).");
+              localStorage.clear();
+              location.reload();
+            }
+          })
+          .withFailureHandler(function(e) {
+            clearInterval(globalTimer);
+            alert("Błąd połączenia: " + e.message);
+            btn.disabled = false;
+            btn.style.background = "#ef4444";
+            btn.innerText = "PONÓW WYSYŁANIE";
+          })
+          .saveAllTasks(teamName, tasks, startTime);
+      }
+    </script>
+  </body>
+</html>
