@@ -403,7 +403,29 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       if (existingBatch.team !== teamName) {
         throw new Error("BatchId należy do innej ekipy");
       }
-    
+      if (existingBatch.status === "TASKS_ASSIGNED") {
+        const nextData = getInitialDataForLoop(teamName);
+      
+      
+        updateInventoryBatchStatus(
+          syncLog,
+          batchId,
+          "DONE"
+        );
+      
+      
+        if (lock.hasLock()) {
+          lock.releaseLock();
+        }
+      
+      
+        return {
+          success: true,
+          alreadySaved: true,
+          hasNewTasks: nextData.tasks.length > 0,
+          newData: nextData
+        };
+      }
       if (existingBatch.status === "TASKS_ASSIGNED") {
         const nextData = getInitialDataForLoop(teamName);
       
