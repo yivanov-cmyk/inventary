@@ -403,7 +403,28 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       if (existingBatch.team !== teamName) {
         throw new Error("BatchId należy do innej ekipy");
       }
-      if (existingBatch.status === "TASKS_ASSIGNED") {
+      if (existingBatch.status === "REPORT_SAVED") {
+        const teamSheet = SS.getSheetByName(teamName);
+      
+      
+        if (teamSheet.getLastRow() >= 2) {
+          throw new Error(
+            "REPORT_SAVED: arkusz ekipy nie jest pusty. Wymagana weryfikacja."
+          );
+        }
+      
+      
+        syncAndGetNewData(teamName, true);
+        SpreadsheetApp.flush();
+      
+      
+        updateInventoryBatchStatus(
+          syncLog,
+          batchId,
+          "TASKS_ASSIGNED"
+        );
+      
+      
         const nextData = getInitialDataForLoop(teamName);
       
       
