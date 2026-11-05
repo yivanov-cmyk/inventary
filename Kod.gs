@@ -321,10 +321,93 @@ function fixStatusForSecondCount() {
   });
   masterSheet.getRange(2, 15, newData.length, 1).setValues(newData);
 }
-function saveAllTasks(teamName, allTasks, startTime) {
+function getInventorySyncLog() {
+  const name = "Inventory_Sync_Log";
+  let sheet = SS.getSheetByName(name);
+
+
+  if (!sheet) {
+    sheet = SS.insertSheet(name);
+    sheet.appendRow([
+      "BatchId",
+      "Team",
+      "Status",
+      "UpdatedAt"
+    ]);
+  }
+
+
+  return sheet;
+}
+
+
+function findInventoryBatch(sheet, batchId) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+
+  const cell = sheet.getRange(2, 1, lastRow - 1, 1)
+    .createTextFinder(batchId)
+    .matchEntireCell(true)
+    .findNext();
+
+
+  if (!cell) return null;
+
+
+  const row = cell.getRow();
+
+
+  return {
+    row: row,
+    team: sheet.getRange(row, 2).getValue(),
+    status: sheet.getRange(row, 3).getValue()
+  };
+}
+function saveAllTasks(teamName, allTasks, startTime, batchId) {
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(50000); 
+    if (!batchId) {
+      throw new Error("Brak BatchId");
+    }
+    
+    
+    const syncLog = getInventorySyncLog();
+    const existingBatch = findInventoryBatch(syncLog, batchId);
+    
+    
+    if (existingBatch) {
+      if (existingBatch.team !== teamName) {
+        throw new Error("BatchId należy do innej ekipy");
+      }
+    
+    
+      if (existingBatch.status === "DONE") {
+        const nextData = getInitialDataForLoop(teamName);
+    
+    
+        return {
+          success: true,
+          alreadySaved: true,
+          hasNewTasks: nextData.tasks.length > 0,
+          newData: nextData
+        };
+      }
+    
+    
+      throw new Error(
+        "Partia wymaga weryfikacji: " + existingBatch.status
+      );
+    }
+    
+    
+    syncLog.appendRow([
+      batchId,
+      teamName,
+      "STARTED",
+      new Date()
+    ]);
     const toNum = (val) => {
       if (val === "" || val === null || val === undefined) return 0;
       let n = parseFloat(String(val).replace(/\s+/g, '').replace(',', '.'));
@@ -502,7 +585,14 @@ function saveAllTasks(teamName, allTasks, startTime) {
     
     syncAndGetNewData(teamName);
     const nextData = getInitialDataForLoop(teamName); 
+    const batchRecord = findInventoryBatch(syncLog, batchId);
 
+
+    syncLog.getRange(batchRecord.row, 3, 1, 2)
+      .setValues([["DONE", new Date()]]);
+    
+    
+    SpreadsheetApp.flush();
     if (lock.hasLock()) lock.releaseLock();
     return { success: true, hasNewTasks: nextData.tasks.length > 0, newData: nextData };
 
