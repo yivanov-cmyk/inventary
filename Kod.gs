@@ -428,18 +428,10 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     
     
     
-    currentTasks.forEach(row => {
-      const key = JSON.stringify([
-        String(row[0]),
-        String(row[1]),
-        Number(row[9])
-      ]);
     
     
-      if (!sentTasks.has(key)) {
-        throw new Error("Brak wyniku: " + row[0]);
-      }
-    });
+    
+      
     const toNum = (val) => {
       if (val === "" || val === null || val === undefined) return 0;
       let n = parseFloat(String(val).replace(/\s+/g, '').replace(',', '.'));
@@ -498,7 +490,18 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     sentTasks.set(key, t);
   });
   
-  
+    currentTasks.forEach(row => {
+      const key = JSON.stringify([
+        String(row[0]),
+        String(row[1]),
+        Number(row[9])
+      ]);
+    
+    
+      if (!sentTasks.has(key)) {
+        throw new Error("Brak wyniku: " + row[0]);
+      }
+    });
   
     const masterSheet = SS.getSheetByName(MASTER_SHEET_NAME);
     syncLog.appendRow([
