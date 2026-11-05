@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f4f4f4; }
+      .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; width: 80%; max-width: 300px; }
+      input { width: 100%; padding: 15px; margin: 10px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 18px; text-align: center; }
+      button { width: 100%; padding: 15px; background: #2c3e50; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+      button:active { background: #1a252f; }
+      .error { color: red; font-size: 14px; margin-bottom: 10px; display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h2>Inwentaryzacja</h2>
+      <p>Wpisz kod ekipy:</p>
+      <div id="error" class="error">Błędny kod! Spróbuj ponownie.</div>
+      <input type="password" id="pass" placeholder="KOD" inputmode="text">
+      <button onclick="login()">ZALOGUJ</button>
+    </div>
+
+    <script>
+      function login() {
+        const pass = document.getElementById('pass').value;
+        const btn = document.querySelector('button');
+        btn.disabled = true;
+        btn.innerText = "Łączenie...";
+        
+        google.script.run.withSuccessHandler(function(url) {
+          if (url) {
+            window.top.location.href = url; // TO PRZEKIEROWUJE DO ARKUSZA
+          } else {
+            document.getElementById('error').style.display = 'block';
+            btn.disabled = false;
+            btn.innerText = "ZALOGUJ";
+          }
+        }).getSheetUrl(pass);
+      }
+    </script>
+  </body>
+</html>
