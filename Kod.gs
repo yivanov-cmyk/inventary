@@ -196,10 +196,7 @@ function emergencyForceSaveTeam() {
   
   
   
-    if (!sentTasks.has(key)) {
-      throw new Error("Brak wyniku: " + row[0]);
-    }
-  });
+    
   const allTasksMapped = currentTasks.map(row => {
     return {
       loc: String(row[0]),
@@ -501,6 +498,10 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       String(row[1]),
       Number(row[9])
     ]);
+    if (!sentTasks.has(key)) {
+        throw new Error("Brak wyniku: " + row[0]);
+      }
+    });
     const masterSheet = SS.getSheetByName(MASTER_SHEET_NAME);
     const reportSheet = SS.getSheetByName(REPORT_SHEET_NAME);
     
