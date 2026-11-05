@@ -11,6 +11,47 @@ const KODY = {
   "ekipa5": "Ekipa_5", "ekipa6": "Ekipa_6", "ekipa7": "Ekipa_7", "ekipa8": "Ekipa_8",
   "ekipa9": "Ekipa_9", "ekipa10": "Ekipa_10", "ekipa11": "Ekipa_11", "ekipa12": "Ekipa_12","ekipa13": "Ekipa_13", "ekipa14": "Ekipa_14", "ekipa15": "Ekipa_15", "ekipa16": "Ekipa_16","meza":"Ekipa_MEZA"
 };
+function testSaveWithQueue(teamName, tasks, startTime, batchId) {
+  const maxAttempts = 10;
+
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = saveAllTasks(
+      teamName,
+      tasks,
+      startTime,
+      batchId
+    );
+
+
+    if (result.success) {
+      return {
+        ...result,
+        attempts: attempt
+      };
+    }
+
+
+    const msg = String(result.msg || "");
+
+
+    // Повторяем только ошибку блокировки.
+    if (!/lock|blokad|zablokowan/i.test(msg)) {
+      return result;
+    }
+
+
+    if (attempt < maxAttempts) {
+      Utilities.sleep(5000);
+    }
+  }
+
+
+  return {
+    success: false,
+    msg: "Przekroczono limit prób zapisu."
+  };
+}
 function stressTestSimultaneousSaving() {
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwiShWCO9BO22LOAVphZwuuG7Fd_vC-LOoP1SqzKel6SesxvgFqeRwrv_U6n1fqvK5H/exec";
   
