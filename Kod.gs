@@ -154,7 +154,9 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({"success": true})).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    if (lock.hasLock()) lock.releaseLock();
+    if (!alreadyLocked && lock.hasLock()) {
+      lock.releaseLock();
+    }
     console.error("Błąd doPost: " + err.message);
     return ContentService.createTextOutput(JSON.stringify({"success": false, "error": err.message})).setMimeType(ContentService.MimeType.JSON);
   }
@@ -441,7 +443,9 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     const teamSheet = SS.getSheetByName(teamName);
     const lastRow = teamSheet.getLastRow();
     if (lastRow < 2) {
-      if (lock.hasLock()) lock.releaseLock();
+      if (!alreadyLocked && lock.hasLock()) {
+        lock.releaseLock();
+      }
       return { success: true, msg: "Brak danych." };
     }
 
@@ -681,7 +685,7 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     teamSheet.getRange("A2:K").clearContent()
     SpreadsheetApp.flush(); // Wymuś zapis przed sync
     
-    syncAndGetNewData(teamName);
+    syncAndGetNewData(teamName,true);
 
 
     SpreadsheetApp.flush();
@@ -702,7 +706,9 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
       batchId,
       "DONE"
     );
-    if (lock.hasLock()) lock.releaseLock();
+    if (!alreadyLocked && lock.hasLock()) {
+      lock.releaseLock();
+    }
     return { success: true, hasNewTasks: nextData.tasks.length > 0, newData: nextData };
 
   } catch (e) {
@@ -722,7 +728,9 @@ function ssaveAllTasks(teamName, allTasks, startTime) {
     const teamSheet = SS.getSheetByName(teamName);
     const lastRow = teamSheet.getLastRow();
     if (lastRow < 2) {
-      if (lock.hasLock()) lock.releaseLock();
+      if (!alreadyLocked && lock.hasLock()) {
+        lock.releaseLock();
+      }
       return { success: true, msg: "Brak danych." };
     }
     const currentTasks = teamSheet.getRange(2, 1, lastRow - 1, 11).getValues();
@@ -780,14 +788,16 @@ function ssaveAllTasks(teamName, allTasks, startTime) {
     }
 
     teamSheet.getRange("A2:K").clearContent(); 
-    syncAndGetNewData(teamName);
+    syncAndGetNewData(teamName,true);
     const nextData = getInitialDataForLoop(teamName); 
 
     lock.releaseLock();
     return { success: true, hasNewTasks: nextData.tasks.length > 0, newData: nextData };
 
   } catch (e) {
-    if (lock.hasLock()) lock.releaseLock();
+    if (!alreadyLocked && lock.hasLock()) {
+      lock.releaseLock();
+    }
     return { success: false, msg: e.message };
   }
 }
@@ -876,7 +886,7 @@ function wyzwijRozbieznosci() {
     }
   }
 }
-function syncAndGetNewData(manualTeamName) {
+function syncAndGetNewData(manualTeamName, alreadyLocked = false) {
   const sheet = manualTeamName ? SS.getSheetByName(manualTeamName) : SS.getActiveSheet();
   const teamName = sheet.getName();
   if (!teamName.startsWith("Ekipa_")) return;
@@ -886,7 +896,9 @@ function syncAndGetNewData(manualTeamName) {
   const lock = LockService.getScriptLock();
 
   try {
-    lock.waitLock(50000); 
+    if (!alreadyLocked){
+      lock.waitLock(50000); 
+    }
     const lastRowMaster = masterSheet.getLastRow();
     if (lastRowMaster < 2) { if(lock.hasLock()) lock.releaseLock(); return; }
 
@@ -1028,7 +1040,9 @@ function syncAndGetNewData(manualTeamName) {
       SpreadsheetApp.flush(); 
     }
 
-    if (lock.hasLock()) lock.releaseLock();
+    if (!alreadyLocked && lock.hasLock()) {
+      lock.releaseLock();
+    }
     if (tasksToLoad.length === 0) return;
 
     // --- SORTOWANIE TRASY ---
@@ -1315,7 +1329,7 @@ function forceAssignTasksFromDashboard() {
   }
   if (count > 0) {
     SpreadsheetApp.flush();
-    syncAndGetNewData(teamName); 
+    syncAndGetNewData(teamName,true); 
     SpreadsheetApp.getUi().alert("Sukces! Przypisano " + count + " wierszy alejki " + alleyNum + " do " + teamName);
     updateDashboardSheet();
   } else {
@@ -1396,14 +1410,16 @@ function distributeInitialData() {
     for (let i = 1; i <= TEAMS_COUNT; i++) {
       const teamName = "Ekipa_" + i;
       console.log("Przetwarzanie: " + teamName);
-      syncAndGetNewData(teamName);
+      syncAndGetNewData(teamName,true);
       SpreadsheetApp.flush(); 
       Utilities.sleep(500); 
     }
     lock.releaseLock();
     ui.alert("Sukces! Rozdzielono pracę na wszystkie ekipy (1-13).");
   } catch (e) {
-    if (lock.hasLock()) lock.releaseLock();
+    if (!alreadyLocked && lock.hasLock()) {
+      lock.releaseLock();
+    }
     ui.alert("Błąd krytyczny dystrybucji: " + e.message);
   }
 }
@@ -1463,7 +1479,7 @@ function autoAssignNextAlleysUI() {
   }
   masterRange.setValues(masterData);
   SpreadsheetApp.flush();
-  syncAndGetNewData(teamName); 
+  syncAndGetNewData(teamName,true); 
   ui.alert("Sukces! Przypisano alejki: " + selectedAlleys.join(", ") + " do " + teamName);
   updateDashboardSheet();
 }
