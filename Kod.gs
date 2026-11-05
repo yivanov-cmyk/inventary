@@ -349,9 +349,20 @@ function saveAllTasks(teamName, allTasks, startTime) {
     // --- OPTYMALIZACJA 1: MAPA RAPORTU ---
     // Lokalizacja występuje raz, więc robimy szybki indeks
     let reportMap = {};
-    for (let i = 1; i < reportData.length; i++) {
-      let locKey = String(reportData[i][2]); // Kolumna C (indeks 2)
-      reportMap[locKey] = i; // Zapamiętujemy numer wiersza (indeks tablicy)
+
+
+    for (let i = reportData.length - 1; i >= 1; i--) {
+      const loc = String(reportData[i][2]);
+      const sku = String(reportData[i][3]);
+      const key = JSON.stringify([loc, sku]);
+    
+    
+      if (!reportMap[key]) {
+        reportMap[key] = [];
+      }
+    
+    
+      reportMap[key].push(i);
     }
 
     const endTime = Utilities.formatDate(new Date(), "GMT+1", "HH:mm:ss");
@@ -360,6 +371,7 @@ function saveAllTasks(teamName, allTasks, startTime) {
     let masterStatusValues = masterStatusRange.getValues();
     
     let newReportEntries = [];
+    let reportUpdates = [];
     let reportWasModified = false;
 
     currentTasks.forEach(row => {
@@ -373,26 +385,72 @@ function saveAllTasks(teamName, allTasks, startTime) {
       const comment = match ? match.comment : "";
 
       if (type === "2. LICZENIE") {
-        // --- OPTYMALIZACJA 2: DOSTĘP PRZEZ MAPĘ ---
-        let rowIndex = reportMap[loc];
-        
-        // Sprawdzamy czy SKU się zgadza i czy puste (H - indeks 7)
-        if (rowIndex !== undefined && String(reportData[rowIndex][3]) === sku && String(reportData[rowIndex][7]) === "") {
-          const finalStatus = (fiz === sys) ? "OK (2.L)" : "ROZBIEŻNOŚĆ FINALNA";       
-          
-          // MODYFIKUJEMY TABLICĘ W PAMIĘCI ZAMIAST ARKUSZA
-          reportData[rowIndex][7] = fiz;          // Kolumna H (2. Liczenie)
-          reportData[rowIndex][8] = finalStatus;  // Kolumna I (Status)
-          reportData[rowIndex][14] = comment;     // Kolumna O (Komentarz2)
-          reportWasModified = true;
 
+
+        const key = JSON.stringify([loc, sku]);
+        const candidates = reportMap[key] || [];
+      
+      
+        const rowIndex = candidates.find(i =>
+          reportData[i][7] === "" ||
+          reportData[i][7] === null
+        );
+      
+      
+        if (rowIndex !== undefined) {
+      
+      
+          const finalStatus = (fiz === sys)
+            ? "OK (2.L)"
+            : "ROZBIEŻNOŚĆ FINALNA";
+      
+      
+          reportData[rowIndex][7] = fiz;
+          reportData[rowIndex][8] = finalStatus;
+          reportData[rowIndex][14] = comment;
+      
+      
+          reportUpdates.push({
+            row: rowIndex + 1,
+            qty: fiz,
+            status: finalStatus,
+            comment: comment
+          });
+      
+      
           if (masterRowIdx && masterRowIdx <= masterLastRow) {
-            masterStatusValues[masterRowIdx - 1][0] = "ZAKOŃCZONE FINALNIE (" + teamName + ")";
+            masterStatusValues[masterRowIdx - 1][0] =
+              "ZAKOŃCZONE FINALNIE (" + teamName + ")";
           }
+      
+      
         } else {
-          // Jeśli nie znaleziono w mapie (unikalna lokalizacja), budujemy nowy wiersz
-          newReportEntries.push(buildReportRow(new Date(), teamName, loc, sku, row[6], sys, "", fiz, "ROZBIEŻNOŚĆ FINALNA", "", startTime, endTime, masterRowIdx, comment, masterSheet));
+      
+      
+          newReportEntries.push(
+            buildReportRow(
+              new Date(),
+              teamName,
+              loc,
+              sku,
+              row[6],
+              sys,
+              "",
+              fiz,
+              "ROZBIEŻNOŚĆ FINALNA",
+              "",
+              startTime,
+              endTime,
+              masterRowIdx,
+              comment,
+              masterSheet
+            )
+          );
+      
+      
         }
+      
+      
       } else {
         const isOk = (fiz === sys);
         const status = isOk ? "OK" : "DO 2. LICZENIA"; 
@@ -411,9 +469,23 @@ function saveAllTasks(teamName, allTasks, startTime) {
     masterStatusRange.setValues(masterStatusValues);
     
     // 2. Aktualizacja istniejących wierszy w Raporcie (jeśli były zmiany w 2. liczeniu)
-    if (reportWasModified) {
-      reportRange.setValues(reportData);
-    }
+    
+
+    reportUpdates.forEach(update => {
+    
+    
+      reportSheet.getRange(update.row, 8, 1, 2)
+        .setValues([[
+          update.qty,
+          update.status
+        ]]);
+    
+    
+      reportSheet.getRange(update.row, 15)
+        .setValue(update.comment);
+    
+    
+    });
 
     // 3. Dodanie nowych wierszy do Raportu
     if (newReportEntries.length > 0) {
