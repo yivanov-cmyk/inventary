@@ -732,7 +732,15 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
 
     // 3. Dodanie nowych wierszy do Raportu
     if (newReportEntries.length > 0) {
-      reportSheet.getRange(reportSheet.getLastRow() + 1, 1, newReportEntries.length, 20).setValues(newReportEntries);
+      const rowsWithBatch = newReportEntries.map(row => [
+        ...row,
+        batchId
+      ]);
+    
+    
+      reportSheet
+        .getRange(reportSheet.getLastRow() + 1, 1, rowsWithBatch.length, 21)
+        .setValues(rowsWithBatch);
     }
 
     // Raport i Master zostały zapisane
