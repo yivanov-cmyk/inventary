@@ -695,7 +695,7 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
           
             newReportEntries.push(newRow);
           }
-          );
+          
       
       
         }
