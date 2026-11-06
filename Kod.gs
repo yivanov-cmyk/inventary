@@ -11,47 +11,6 @@ const KODY = {
   "ekipa5": "Ekipa_5", "ekipa6": "Ekipa_6", "ekipa7": "Ekipa_7", "ekipa8": "Ekipa_8",
   "ekipa9": "Ekipa_9", "ekipa10": "Ekipa_10", "ekipa11": "Ekipa_11", "ekipa12": "Ekipa_12","ekipa13": "Ekipa_13", "ekipa14": "Ekipa_14", "ekipa15": "Ekipa_15", "ekipa16": "Ekipa_16","meza":"Ekipa_MEZA"
 };
-function testSaveWithQueue(teamName, tasks, startTime, batchId) {
-  const maxAttempts = 10;
-
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const result = saveAllTasks(
-      teamName,
-      tasks,
-      startTime,
-      batchId
-    );
-
-
-    if (result.success) {
-      return {
-        ...result,
-        attempts: attempt
-      };
-    }
-
-
-    const msg = String(result.msg || "");
-
-
-    // Повторяем только ошибку блокировки.
-    if (!/lock|blokad|zablokowan/i.test(msg)) {
-      return result;
-    }
-
-
-    if (attempt < maxAttempts) {
-      Utilities.sleep(5000);
-    }
-  }
-
-
-  return {
-    success: false,
-    msg: "Przekroczono limit prób zapisu."
-  };
-}
 function stressTestSimultaneousSaving() {
   const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwiShWCO9BO22LOAVphZwuuG7Fd_vC-LOoP1SqzKel6SesxvgFqeRwrv_U6n1fqvK5H/exec";
   
@@ -402,8 +361,6 @@ function getInventorySyncLog() {
 
   return sheet;
 }
-
-
 function findInventoryBatch(sheet, batchId) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
@@ -849,91 +806,6 @@ function saveAllTasks(teamName, allTasks, startTime, batchId) {
     return { success: false, msg: e.message };
   }
 }
-function ssaveAllTasks(teamName, allTasks, startTime) {
-  const lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(50000); 
-    const toNum = (val) => {
-      if (val === "" || val === null || val === undefined) return 0;
-      let n = parseFloat(String(val).replace(/\s+/g, '').replace(',', '.'));
-      return isNaN(n) ? 0 : n;
-    };
-    const teamSheet = SS.getSheetByName(teamName);
-    const lastRow = teamSheet.getLastRow();
-    if (lastRow < 2) {
-      if (!alreadyLocked && lock.hasLock()) {
-        lock.releaseLock();
-      }
-      return { success: true, msg: "Brak danych." };
-    }
-    const currentTasks = teamSheet.getRange(2, 1, lastRow - 1, 11).getValues();
-    const masterSheet = SS.getSheetByName(MASTER_SHEET_NAME);
-    const reportSheet = SS.getSheetByName(REPORT_SHEET_NAME);
-    const reportRange = reportSheet.getDataRange();
-    const reportData = reportRange.getValues();
-    const endTime = Utilities.formatDate(new Date(), "GMT+1", "HH:mm:ss");
-    const masterLastRow = masterSheet.getLastRow();
-    const masterStatusRange = masterSheet.getRange(1, 15, masterLastRow, 1);
-    let masterStatusValues = masterStatusRange.getValues();
-    let newReportEntries = [];
-    currentTasks.forEach(row => {
-      const loc = String(row[0]);
-      const sku = String(row[1]);
-      const sys = toNum(row[3]);
-      const type = row[4]; 
-      const masterRowIdx = parseInt(row[9]); 
-      const match = allTasks.find(t => String(t.loc) === loc);
-      const fiz = match ? toNum(match.qty) : 0;
-      const comment = match ? match.comment : "";
-      if (type === "2. LICZENIE") {
-        let foundInReport = false;
-        for (let i = reportData.length - 1; i >= 1; i--) {
-          if (String(reportData[i][2]) === loc && String(reportData[i][3]) === sku && String(reportData[i][7]) === "") {
-            const finalStatus = (fiz === sys) ? "OK (2.L)" : "ROZBIEŻNOŚĆ FINALNA";       
-            reportSheet.getRange(i + 1, 8).setValue(fiz);          // 2. Liczenie
-            reportSheet.getRange(i + 1, 9).setValue(finalStatus);  // Status
-            reportSheet.getRange(i + 1, 15).setValue(comment);     // Komentarz2
-            if (masterRowIdx && masterRowIdx <= masterLastRow) {
-              masterStatusValues[masterRowIdx - 1][0] = "ZAKOŃCZONE FINALNIE (" + teamName + ")";
-            }
-            foundInReport = true;
-            break;
-          }
-        }
-        if (!foundInReport) {
-          newReportEntries.push(buildReportRow(now, teamName, loc, sku, row[6], sys, "", fiz, "ROZBIEŻNOŚĆ FINALNA", "", startTime, endTime, masterRowIdx, comment, masterSheet));
-        }
-      } else {
-        const isOk = (fiz === sys);
-        const status = isOk ? "OK" : "DO 2. LICZENIA"; 
-        
-        if (masterRowIdx && masterRowIdx <= masterLastRow) {
-          masterStatusValues[masterRowIdx - 1][0] = status + (isOk ? " (" + teamName + ")" : "");
-        }
-        
-        newReportEntries.push(buildReportRow(new Date(), teamName, loc, sku, row[6], sys, fiz, "", isOk ? "OK" : "ROZBIEŻNOŚĆ", comment, startTime, endTime, masterRowIdx, "", masterSheet));
-      }
-    });
-
-    masterStatusRange.setValues(masterStatusValues);
-    if (newReportEntries.length > 0) {
-      reportSheet.getRange(reportSheet.getLastRow() + 1, 1, newReportEntries.length, 20).setValues(newReportEntries);
-    }
-
-    teamSheet.getRange("A2:K").clearContent(); 
-    syncAndGetNewData(teamName,true);
-    const nextData = getInitialDataForLoop(teamName); 
-
-    lock.releaseLock();
-    return { success: true, hasNewTasks: nextData.tasks.length > 0, newData: nextData };
-
-  } catch (e) {
-    if (!alreadyLocked && lock.hasLock()) {
-      lock.releaseLock();
-    }
-    return { success: false, msg: e.message };
-  }
-}
 function getInitialDataForLoop(teamName) {
   const sheet = SS.getSheetByName(teamName);
   const lastRow = sheet.getLastRow();
@@ -1223,19 +1095,19 @@ function syncAndGetNewData(manualTeamName, alreadyLocked = false) {
     }
 
   } catch (e) {
-  if (!alreadyLocked && lock.hasLock()) {
-    lock.releaseLock();
-  }
+    if (!alreadyLocked && lock.hasLock()) {
+      lock.releaseLock();
+    }
 
 
-  console.error("Błąd sync: " + e.message);
+    console.error("Błąd sync: " + e.message);
 
 
-  if (alreadyLocked) {
-    throw e;
-  }
+    if (alreadyLocked) {
+      throw e;
+    }
+  }  
 }
-
 function generateMissingLevelsAndDiscrepancies() {
   const ui = SpreadsheetApp.getUi();
   const masterSheet = SS.getSheetByName(MASTER_SHEET_NAME);
@@ -1586,7 +1458,166 @@ function onOpen() {
       .addItem('Wyczyść Arkusze Ekip','forceResetAllTeamSheets')
       .addToUi();
 }
+function test15Scanners170() {
+  const SEND_RESULTS = true; // true — реально сохранить результаты
+  const PER_TEAM = 170;
+  const TEAM_COUNT = 15;
+  const REQUIRED = PER_TEAM * TEAM_COUNT;
 
+
+  const masterSheet = SS.getSheetByName(MASTER_SHEET_NAME);
+  const master = masterSheet.getDataRange().getValues();
+
+
+  // Берём только свободные строки Master.
+  const available = [];
+
+
+  for (let i = 1; i < master.length; i++) {
+    const r = master[i];
+
+
+    if (
+      String(r[14]).trim() === "" &&
+      String(r[2]).trim() !== "" &&
+      String(r[7]).trim() !== ""
+    ) {
+      available.push({
+        rowNum: i + 1,
+        data: r
+      });
+    }
+  }
+
+
+  if (available.length < REQUIRED) {
+    throw new Error(
+      "Za mało wolnych pozycji Master: " +
+      available.length + " / " + REQUIRED
+    );
+  }
+
+
+  // Проверяем наличие всех листов до изменений.
+  for (let i = 1; i <= TEAM_COUNT; i++) {
+    if (!SS.getSheetByName("Ekipa_" + i)) {
+      throw new Error("Brak arkusza Ekipa_" + i);
+    }
+  }
+
+
+  const testId = Utilities.getUuid().slice(0, 8);
+  const results = [];
+  let index = 0;
+
+
+  // Подготавливаем ровно 170 заданий на команду.
+  for (let team = 1; team <= TEAM_COUNT; team++) {
+    const teamName = "Ekipa_" + team;
+    const sheet = SS.getSheetByName(teamName);
+    const rows = [];
+
+
+    for (let j = 0; j < PER_TEAM; j++) {
+      const item = available[index++];
+      const r = item.data;
+
+
+      rows.push([
+        r[2],                 // A: Lokalizacja
+        r[7],                 // B: SKU
+        "",                   // C
+        r[8],                 // D: Ilość systemowa
+        "1. LICZENIE",        // E: Typ
+        "",                   // F
+        r[10],                // G: Batch
+        r[8],                 // H
+        r[11],                // I
+        item.rowNum,          // J: MasterRow
+        r[13] || "BRAK"       // K
+      ]);
+
+
+      // Резервируем позицию за командой.
+      r[14] = "ZAREZERWOWANE (" + teamName + ")";
+    }
+
+
+    sheet.getRange("A2:K").clearContent();
+    sheet.getRange(2, 1, PER_TEAM, 11).setValues(rows);
+
+
+    results.push({
+      team: teamName,
+      prepared: rows.length,
+      status: "PREPARED"
+    });
+  }
+
+
+  // Сохраняем резервирования в Master.
+  masterSheet.getRange(2, 15, master.length - 1, 1)
+    .setValues(master.slice(1).map(r => [r[14]]));
+
+
+  SpreadsheetApp.flush();
+
+
+  if (!SEND_RESULTS) {
+    console.log(
+      "PREPARED: " + REQUIRED +
+      " tasks. Set SEND_RESULTS = true to save."
+    );
+    console.log(JSON.stringify(results, null, 2));
+    return;
+  }
+
+
+  // Отправляем результаты через реальную saveAllTasks().
+  for (let team = 1; team <= TEAM_COUNT; team++) {
+    const teamName = "Ekipa_" + team;
+    const data = getInitialDataForLoop(teamName);
+
+
+    const tasks = data.tasks.map(t => ({
+      loc: t.loc,
+      sku: t.sku,
+      masterRow: t.masterRow,
+      qty: Number(t.sysQty) || 0,
+      comment: "TEST_170"
+    }));
+
+
+    const batchId = "LOADTEST-" + testId + "-" + teamName;
+    const started = Date.now();
+
+
+    const response = saveAllTasks(
+      teamName,
+      tasks,
+      data.startTime,
+      batchId
+    );
+
+
+    const result = results[team - 1];
+    result.status = response.success ? "OK" : "ERROR";
+    result.seconds = (Date.now() - started) / 1000;
+    result.batchId = batchId;
+    result.message = response.msg || "";
+
+
+    console.log(
+      teamName + ": " +
+      result.status + " | " +
+      result.seconds + "s | " +
+      result.message
+    );
+  }
+
+
+  console.log(JSON.stringify(results, null, 2));
+}
 function autoAssignNextAlleysUI() {
   const ui = SpreadsheetApp.getUi();
   const teamResponse = ui.prompt('AUTOMATYCZNE DOŁADOWANIE', 'Dla której ekipy pobrać alejki? (np. 5):', ui.ButtonSet.OK_CANCEL);
@@ -1659,7 +1690,7 @@ function fetchBigQueryDataAndDistribute() {
       SELECT * FROM (
         SELECT VLCART AS Article, VLCVLA, VLQVLB 
         FROM \`fml-prod-rep-pl-rfx-sbe.last_rows_sbe.hlarvlp\` 
-        WHERE VLCACT IN ('MTE')
+        WHERE VLCACT IN ('LNP')
       )
       PIVOT (MAX(VLQVLB) FOR VLCVLA IN ('10' as spcb, '20' as pcb, '30' as base_lv_on_pallet))
     ),
@@ -1675,7 +1706,7 @@ function fetchBigQueryDataAndDistribute() {
       LEFT JOIN \`fml-prod-rep-pl-rfx-sbe.last_rows_sbe.hlrecpp\` hl_rec_entete 
         ON hl_gei.GECACT = hl_rec_entete.RECACT AND hl_gei.GECDPR = hl_rec_entete.RECDPO 
         AND hl_gei.GENANN = hl_rec_entete.RENANN AND hl_gei.GENREC = hl_rec_entete.RENREC
-      WHERE hl_gei.GECACT IN ('MTE') AND hl_gei.GECTST = '200'
+      WHERE hl_gei.GECACT IN ('LNP') AND hl_gei.GECTST = '200'
     ),
     stock_data AS (
       SELECT 
@@ -1730,7 +1761,7 @@ function fetchBigQueryDataAndDistribute() {
 
     WHERE
         (b.PhysicalDepot = "SBE"
-        AND b.Building in ("B01") 
+        AND b.Building in ("B09") 
         AND NOT REGEXP_CONTAINS(LOWER(b.Location), r'usz')
         AND b.Location NOT IN ('MISSING', 'QUALITY', 'ANULM', 'ANULS', 'ANULY', 'UTYLIZAC', 'UTYL1MEB', 'REPA.LET', 'RETAINS', 'NADW', 'WYCI', 'KARTONY', 'KIERMASZ')
         AND b.Location NOT LIKE 'BUFOR%'
@@ -1743,9 +1774,7 @@ function fetchBigQueryDataAndDistribute() {
         and Alley not in ('ZWR',"ZMIA","TEMP","SDB","YRP","WYS","REG.","PARC","OBNI","MEZA","MTE","DYRP","LINE","KONS","KONT","J04","J03","J02","J01","DSDB","DMTE","DGLE","CONV","CLOU")
         AND b.Location LIKE '%.%' 
         
-        and (SAFE_CAST(b.Alley AS INT64) >= 152 or level>"10"))
-        or (Building="B02" and REGEXP_CONTAINS(b.GeographicalZoneCode, '(?i)MTE')
-        AND ((level="10" and b.Alley="0259") or (level="10" and b.Alley="0262") or (level="10" and b.Alley="0260") or (level="10" and b.Alley="0261") or safe_cast(b.Alley as INT64)<=258)
+        
         
         AND NOT REGEXP_CONTAINS(LOWER(b.Location), r'usz')
         AND b.Location NOT IN ('MISSING', 'QUALITY', 'ANULM', 'ANULS', 'ANULY', 'UTYLIZAC', 'UTYL1MEB', 'REPA.LET', 'RETAINS', 'NADW', 'WYCI', 'KARTONY', 'KIERMASZ')
@@ -1891,4 +1920,1089 @@ function parseLocationExtended(locStr) {
     lvl: sub.substring(3, 5),   // 10
     pos: sub.substring(5)       // 01
   };
+}
+function start15ScannersTest() {
+  const COUNT = 15;
+  const RUN_ID = Utilities.getUuid();
+  const props = PropertiesService.getScriptProperties();
+
+
+  let totalTasks = 0;
+
+
+  for (let i = 1; i <= COUNT; i++) {
+      const team = "Ekipa_" + i;
+      const data = getInitialDataForLoop(team);
+
+
+      const count = data.tasks.length;
+      totalTasks += count;
+
+
+      console.log(team + ": " + count + " zadań");
+  }
+
+
+  // Создаём отдельный журнал теста.
+  const log = SS.getSheetByName("Test_15_Scanners")
+    || SS.insertSheet("Test_15_Scanners");
+
+
+  log.appendRow([
+    "RunId", "Team", "BatchId", "Status",
+    "Start", "End", "Seconds", "Message"
+  ]);
+
+
+  // 15 независимых запусков примерно через минуту.
+  for (let i = 1; i <= COUNT; i++) {
+    const trigger = ScriptApp.newTrigger("runOneScannerTest")
+      .timeBased()
+      .after(60000)
+      .create();
+
+
+    props.setProperty(
+      "TEST_TRIGGER_" + trigger.getUniqueId(),
+      JSON.stringify({
+        runId: RUN_ID,
+        team: "Ekipa_" + i,
+        batchId: RUN_ID + "-Ekipa_" + i
+      })
+    );
+  }
+
+
+  console.log(
+    "Созданы " + COUNT + " триггеров. " +
+    "Всего выдано заданий: " + totalTasks +
+    ". RunId: " + RUN_ID
+  );
+}
+
+
+
+
+function runOneScannerTest(e) {
+  const props = PropertiesService.getScriptProperties();
+  const triggerId = String(e.triggerUid);
+  const key = "TEST_TRIGGER_" + triggerId;
+  const raw = props.getProperty(key);
+
+
+  if (!raw) {
+    throw new Error("Не найдены параметры тестового запуска");
+  }
+
+
+  const config = JSON.parse(raw);
+  const team = config.team;
+  const started = new Date();
+  let status = "ERROR";
+  let message = "";
+
+
+  try {
+    const data = getInitialDataForLoop(team);
+
+
+    
+
+
+    const tasks = data.tasks.map(t => ({
+      loc: t.loc,
+      sku: t.sku,
+      masterRow: t.masterRow,
+      qty: Number(t.sysQty) || 0,
+      comment: "LOAD_TEST_15"
+    }));
+
+
+    // Настоящее сохранение, как со сканера.
+    const response = testSaveWithQueue(
+      team,
+      tasks,
+      data.startTime,
+      config.batchId
+    );
+
+
+    if (!response.success) {
+      throw new Error(response.msg || "Ошибка сохранения");
+    }
+
+
+    status = "OK";
+
+
+  } catch (err) {
+    message = err.message;
+
+
+  } finally {
+    const finished = new Date();
+
+
+    // Удаляем только свой триггер.
+    ScriptApp.getProjectTriggers().forEach(t => {
+      if (t.getUniqueId() === triggerId) {
+        ScriptApp.deleteTrigger(t);
+      }
+    });
+
+
+    props.deleteProperty(key);
+
+
+    const log = SS.getSheetByName("Test_15_Scanners");
+
+
+    // Отдельная блокировка для записи журнала.
+    const logLock = LockService.getDocumentLock()
+      || LockService.getScriptLock();
+
+
+    try {
+      logLock.waitLock(30000);
+
+
+      log.appendRow([
+        config.runId,
+        team,
+        config.batchId,
+        status,
+        started,
+        finished,
+        (finished - started) / 1000,
+        message
+      ]);
+
+
+      SpreadsheetApp.flush();
+
+
+    } finally {
+      if (logLock.hasLock()) {
+        logLock.releaseLock();
+      }
+    }
+
+
+    console.log(
+      team + " | " + status +
+      " | " + ((finished - started) / 1000) +
+      "s | " + message
+    );
+  }
+}
+function testSaveWithQueue(teamName, tasks, startTime, batchId) {
+  const maxAttempts = 10;
+
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = saveAllTasks(
+      teamName,
+      tasks,
+      startTime,
+      batchId
+    );
+
+
+    if (result.success) {
+      return {
+        ...result,
+        attempts: attempt
+      };
+    }
+
+
+    const msg = String(result.msg || "");
+
+
+    // Повторяем только ошибку блокировки.
+    if (!/lock|blokad|zablokowan/i.test(msg)) {
+      return result;
+    }
+
+
+    if (attempt < maxAttempts) {
+      Utilities.sleep(5000);
+    }
+  }
+
+
+  return {
+    success: false,
+    msg: "Przekroczono limit prób zapisu."
+  };
+}
+/**
+ * Kolejka inwentaryzacji — wersja testowa.
+ * Dodać jako osobny plik .gs w projekcie Apps Script.
+ * Nie modyfikuje saveAllTasks() ani interfejsu skanera.
+ */
+const IQ = {
+  QUEUE: 'Inventory_Queue',
+  DATA: 'Inventory_Queue_Data',
+  TEST: 'Test_15_Scanners_Queue',
+  CHUNK: 30000,
+  STALE_MS: 20 * 60 * 1000
+};
+
+function auditInventoryQueue() {
+  const queue = SS.getSheetByName('Inventory_Queue');
+  const report = SS.getSheetByName(REPORT_SHEET_NAME);
+  const syncLog = SS.getSheetByName('Inventory_Sync_Log');
+
+
+  if (!queue || !report) {
+    throw new Error('Brak arkusza kolejki lub raportu');
+  }
+
+
+  const queueRows = queue.getLastRow() > 1
+    ? queue.getRange(2, 1, queue.getLastRow() - 1, 9).getValues()
+    : [];
+
+
+  const reportRows = report.getLastRow() > 1
+    ? report.getRange(2, 1, report.getLastRow() - 1, 22).getValues()
+    : [];
+
+
+  const syncRows = syncLog && syncLog.getLastRow() > 1
+    ? syncLog.getRange(2, 1, syncLog.getLastRow() - 1, 4).getValues()
+    : [];
+
+
+  const reportCounts = new Map();
+  const syncStatuses = new Map();
+
+
+  // U = pierwsze liczenie, V = drugie liczenie.
+  reportRows.forEach(row => {
+    const first = String(row[20] || '').trim();
+    const second = String(row[21] || '').trim();
+
+
+    if (first) {
+      reportCounts.set(
+        first,
+        (reportCounts.get(first) || 0) + 1
+      );
+    }
+
+
+    if (second) {
+      reportCounts.set(
+        second,
+        (reportCounts.get(second) || 0) + 1
+      );
+    }
+  });
+
+
+  syncRows.forEach(row => {
+    syncStatuses.set(String(row[0]), String(row[2]));
+  });
+
+
+  let audit = SS.getSheetByName('Inventory_Queue_Audit');
+
+
+  if (!audit) {
+    audit = SS.insertSheet('Inventory_Queue_Audit');
+  }
+
+
+  audit.clearContents();
+
+
+  const output = [[
+    'BatchId',
+    'Team',
+    'QueueStatus',
+    'SyncStatus',
+    'ExpectedTasks',
+    'ReportMatches',
+    'Difference',
+    'AuditStatus'
+  ]];
+
+
+  queueRows.forEach(row => {
+    const batchId = String(row[0]);
+    const team = String(row[1]);
+    const queueStatus = String(row[2]);
+    const expected = Number(row[6]) || 0;
+
+
+    const syncStatus = syncStatuses.get(batchId) || 'BRAK';
+    const actual = reportCounts.get(batchId) || 0;
+    const difference = actual - expected;
+
+
+    let auditStatus = 'PENDING';
+
+
+    if (queueStatus === 'DONE' && syncStatus === 'DONE') {
+      auditStatus = difference === 0
+        ? 'OK'
+        : 'MISMATCH';
+    } else if (
+      queueStatus === 'NEEDS_REVIEW' ||
+      queueStatus === 'DONE'
+    ) {
+      auditStatus = 'CHECK';
+    }
+
+
+    output.push([
+      batchId,
+      team,
+      queueStatus,
+      syncStatus,
+      expected,
+      actual,
+      difference,
+      auditStatus
+    ]);
+  });
+
+
+  audit.getRange(1, 1, output.length, 8).setValues(output);
+  audit.setFrozenRows(1);
+  SpreadsheetApp.flush();
+
+
+  const summary = {
+    total: output.length - 1,
+    ok: output.slice(1).filter(r => r[7] === 'OK').length,
+    mismatch: output.slice(1).filter(r => r[7] === 'MISMATCH').length,
+    check: output.slice(1).filter(r => r[7] === 'CHECK').length,
+    pending: output.slice(1).filter(r => r[7] === 'PENDING').length
+  };
+
+
+  console.log(JSON.stringify(summary));
+  return summary;
+}
+function inventoryQueueSheets_() {
+  let q = SS.getSheetByName(IQ.QUEUE);
+  if (!q) {
+    q = SS.insertSheet(IQ.QUEUE);
+    q.appendRow(['BatchId', 'Team', 'Status', 'CreatedAt', 'StartedAt',
+      'FinishedAt', 'TaskCount', 'ChunkCount', 'Message']);
+  }
+  let d = SS.getSheetByName(IQ.DATA);
+  if (!d) {
+    d = SS.insertSheet(IQ.DATA);
+    d.appendRow(['BatchId', 'Part', 'Payload']);
+  }
+  return { q, d };
+}
+
+
+function inventoryQueueFind_(sheet, batchId) {
+  const last = sheet.getLastRow();
+  if (last < 2) return null;
+  const cell = sheet.getRange(2, 1, last - 1, 1)
+    .createTextFinder(String(batchId)).matchEntireCell(true).findNext();
+  if (!cell) return null;
+  const row = cell.getRow();
+  const v = sheet.getRange(row, 1, 1, 9).getValues()[0];
+  return { row, batchId: v[0], team: v[1], status: v[2],
+    createdAt: v[3], startedAt: v[4], finishedAt: v[5],
+    count: Number(v[6]), chunks: Number(v[7]), message: String(v[8] || '') };
+}
+
+
+/**
+ * Zapisuje pełną paczkę, zanim zostanie oznaczona jako QUEUED.
+ * Powtórne zgłoszenie tego samego BatchId nie tworzy duplikatu.
+ */
+function enqueueInventory(teamName, allTasks, startTime, batchId) {
+  if (!/^Ekipa_\d+$/.test(String(teamName))) {
+    return { success: false, msg: 'Nieprawidłowa nazwa ekipy' };
+  }
+  if (!batchId || !Array.isArray(allTasks) || !allTasks.length) {
+    return { success: false, msg: 'Brak BatchId lub zadań' };
+  }
+  if (!allTasks.every(t => t && t.loc != null && t.sku != null &&
+      Number.isFinite(Number(t.masterRow)) && Number(t.masterRow) > 0 &&
+      t.qty !== '' && t.qty != null &&
+      Number.isFinite(Number(String(t.qty).replace(',', '.'))))) {
+    return { success: false, msg: 'Nieprawidłowe dane zadań' };
+  }
+
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(25000)) {
+    return { success: false, retryable: true, msg: 'LOCK_BUSY: kolejka zajęta' };
+  }
+  try {
+    const { q, d } = inventoryQueueSheets_();
+    const existing = inventoryQueueFind_(q, batchId);
+    if (existing) {
+      if (existing.team !== teamName) {
+        return { success: false, msg: 'BatchId należy do innej ekipy' };
+      }
+      return { success: true, batchId, status: existing.status,
+        taskCount: existing.count, alreadyQueued: true };
+    }
+
+
+    const payload = JSON.stringify({ teamName, allTasks, startTime, batchId });
+    const chunks = [];
+    for (let i = 0; i < payload.length; i += IQ.CHUNK) {
+      chunks.push([String(batchId), chunks.length + 1,
+        payload.substring(i, i + IQ.CHUNK)]);
+    }
+
+
+    // Najpierw dane; dopiero po ich zapisaniu rejestrujemy gotowe zgłoszenie.
+    d.getRange(d.getLastRow() + 1, 1, chunks.length, 3).setValues(chunks);
+    SpreadsheetApp.flush();
+    q.appendRow([String(batchId), teamName, 'QUEUED', new Date(), '', '',
+      allTasks.length, chunks.length, '']);
+    SpreadsheetApp.flush();
+    return { success: true, batchId, status: 'QUEUED',
+      taskCount: allTasks.length };
+  } catch (err) {
+    return { success: false, msg: String(err.message || err) };
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
+}
+
+
+function inventoryQueueReadPayload_(dataSheet, batchId, expectedChunks) {
+  const last = dataSheet.getLastRow();
+  if (last < 2) throw new Error('Brak danych paczki');
+  const rows = dataSheet.getRange(2, 1, last - 1, 3).getValues()
+    .filter(r => String(r[0]) === String(batchId))
+    .sort((a, b) => Number(a[1]) - Number(b[1]));
+  if (rows.length !== expectedChunks ||
+      rows.some((r, i) => Number(r[1]) !== i + 1)) {
+    throw new Error('Niekompletne fragmenty danych paczki');
+  }
+  const payload = JSON.parse(rows.map(r => String(r[2])).join(''));
+  if (payload.batchId !== batchId ||
+      !Array.isArray(payload.allTasks)) {
+    throw new Error('Niezgodność danych paczki');
+  }
+  return payload;
+}
+
+
+function getInventoryQueueStatus(batchId) {
+  const q = SS.getSheetByName(IQ.QUEUE);
+  if (!q) return { found: false };
+  const item = inventoryQueueFind_(q, batchId);
+  if (!item) return { found: false };
+  return { found: true, batchId: item.batchId, team: item.team,
+    status: item.status, taskCount: item.count, message: item.message };
+}
+
+
+/**
+ * Przetwarza najwyżej jedną paczkę na uruchomienie.
+ * Znacznik PROCESSING zapobiega równoległemu uruchomieniu pracowników.
+ */
+function processInventoryQueue() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return { status: 'BUSY' };
+  let item;
+  try {
+    const { q } = inventoryQueueSheets_();
+    const last = q.getLastRow();
+    if (last < 2) return { status: 'EMPTY' };
+    const rows = q.getRange(2, 1, last - 1, 9).getValues();
+    const active = rows.findIndex(r => r[2] === 'PROCESSING');
+    if (active >= 0) {
+      const activeRow = active + 2;
+      const age = Date.now() - new Date(rows[active][4]).getTime();
+      if (!Number.isFinite(age) || age > IQ.STALE_MS) {
+        return {
+          status: 'RECOVERY_REQUIRED',
+          batchId: rows[active][0]
+        };
+      }
+      return { status: 'BUSY', batchId: rows[active][0] };
+    }
+    const index = rows.findIndex(r => r[2] === 'QUEUED');
+    if (index < 0) return { status: 'EMPTY' };
+    const row = index + 2;
+    item = { row, batchId: String(rows[index][0]),
+      team: String(rows[index][1]), count: Number(rows[index][6]),
+      chunks: Number(rows[index][7]) };
+    q.getRange(row, 3).setValue('PROCESSING');
+    q.getRange(row, 5).setValue(new Date());
+    SpreadsheetApp.flush();
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
+  }
+
+
+  // Nie trzymamy ScriptLock podczas saveAllTasks(), bo ta funkcja
+  // samodzielnie pobiera ten sam typ blokady.
+  let status = 'NEEDS_REVIEW';
+  let message = '';
+  try {
+    const dataSheet = SS.getSheetByName(IQ.DATA);
+    const payload = inventoryQueueReadPayload_(dataSheet, item.batchId, item.chunks);
+    if (payload.teamName !== item.team || payload.allTasks.length !== item.count) {
+      throw new Error('Niezgodność liczby zadań lub ekipy');
+    }
+    const result = saveAllTasks(payload.teamName, payload.allTasks,
+      payload.startTime, payload.batchId);
+    if (result && result.success) {
+      status = 'DONE';
+    } else {
+      // Nie ponawiamy automatycznie: STARTED może oznaczać częściowy zapis.
+      message = String(result && result.msg || 'Brak potwierdzenia zapisu');
+    }
+  } catch (err) {
+    message = String(err.message || err);
+  }
+
+
+  // Zapis stanu nie wymaga ScriptLock, bo jeden pracownik jest aktywny.
+  const q = SS.getSheetByName(IQ.QUEUE);
+  q.getRange(item.row, 3).setValue(status);
+  q.getRange(item.row, 6).setValue(new Date());
+  q.getRange(item.row, 9).setValue(message);
+  SpreadsheetApp.flush();
+  return { batchId: item.batchId, status, message };
+}
+
+
+/** Jednorazowo uruchomić ręcznie, aby włączyć pracownika co minutę. */
+function installInventoryQueueWorker() {
+  const existing = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'processInventoryQueue');
+  if (!existing.length) {
+    ScriptApp.newTrigger('processInventoryQueue').timeBased()
+      .everyMinutes(1).create();
+  }
+  inventoryQueueSheets_();
+  console.log('Pracownik kolejki aktywny.');
+}
+
+
+/** Wyłącza tylko wyzwalacze pracownika kolejki. */
+function stopInventoryQueueWorker() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'processInventoryQueue')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+}
+
+
+/** Uruchamia 15 niezależnych zgłoszeń testowych, bez zmiany saveAllTasks(). */
+function start15ScannersQueueTest() {
+  const runId = Utilities.getUuid();
+  const props = PropertiesService.getScriptProperties();
+  let log = SS.getSheetByName(IQ.TEST);
+  if (!log) {
+    log = SS.insertSheet(IQ.TEST);
+    log.appendRow(['RunId', 'Team', 'BatchId', 'Status',
+      'Tasks', 'StartedAt', 'FinishedAt', 'Seconds', 'Message']);
+  }
+  for (let i = 1; i <= 15; i++) {
+    const team = 'Ekipa_' + i;
+    const trigger = ScriptApp.newTrigger('runOneScannerQueueTest')
+      .timeBased().after(60000).create();
+    props.setProperty('IQ_TEST_' + trigger.getUniqueId(),
+      JSON.stringify({ runId, team, batchId: runId + '-' + team }));
+  }
+  console.log('Utworzono 15 zgłoszeń testowych. RunId: ' + runId);
+}
+
+
+function runOneScannerQueueTest(e) {
+  const props = PropertiesService.getScriptProperties();
+  const uid = String(e.triggerUid);
+  const key = 'IQ_TEST_' + uid;
+  const raw = props.getProperty(key);
+
+
+  if (!raw) {
+    throw new Error('Brak konfiguracji testu');
+  }
+
+
+  const cfg = JSON.parse(raw);
+  const started = new Date();
+
+
+  let status = 'ERROR';
+  let count = 0;
+  let message = '';
+  let attempts = 0;
+
+
+  try {
+    const data = getInitialDataForLoop(cfg.team);
+
+
+    const tasks = data.tasks.map(t => ({
+      loc: t.loc,
+      sku: t.sku,
+      masterRow: t.masterRow,
+      qty: Number(t.sysQty) || 0,
+      comment: 'LOAD_TEST_QUEUE'
+    }));
+
+
+    count = tasks.length;
+
+
+    if (!count) {
+      status = 'EMPTY';
+    } else {
+      const maxAttempts = 4;
+
+
+      for (let i = 1; i <= maxAttempts; i++) {
+        attempts = i;
+
+
+        // Ten sam BatchId przy każdej próbie.
+        const response = enqueueInventory(
+          cfg.team,
+          tasks,
+          data.startTime,
+          cfg.batchId
+        );
+
+
+        if (response.success) {
+          status = response.status;
+          message = response.alreadyQueued
+            ? 'Zgłoszenie już istnieje'
+            : '';
+          break;
+        }
+
+
+        message = String(response.msg || 'Nieznany błąd');
+
+
+        // Ponawiamy wyłącznie przejściowy problem blokady.
+        const retryable = response.retryable === true &&
+          message.indexOf('LOCK_BUSY') !== -1;
+
+
+        if (!retryable || i === maxAttempts) {
+          status = 'ERROR';
+          break;
+        }
+
+
+        Utilities.sleep(3000 + i * 2000);
+      }
+    }
+  } catch (err) {
+    status = 'ERROR';
+    message = String(err.message || err);
+  } finally {
+    const finished = new Date();
+
+
+    // Usuwamy wyłącznie wyzwalacz bieżącego testu.
+    ScriptApp.getProjectTriggers()
+      .filter(t => t.getUniqueId() === uid)
+      .forEach(t => ScriptApp.deleteTrigger(t));
+
+
+    props.deleteProperty(key);
+
+
+    // Osobna blokada dziennika, niezależna od ScriptLock.
+    const logLock = LockService.getDocumentLock();
+
+
+    let logLocked = false;
+
+
+    try {
+      if (logLock) {
+        logLocked = logLock.tryLock(30000);
+      }
+
+
+      if (!logLocked) {
+        console.error(
+          'Nie udało się uzyskać blokady dziennika: ' + cfg.team
+        );
+      } else {
+        const log = SS.getSheetByName(IQ.TEST);
+
+
+        log.appendRow([
+          cfg.runId,
+          cfg.team,
+          cfg.batchId,
+          status,
+          count,
+          started,
+          finished,
+          (finished - started) / 1000,
+          'Próby: ' + attempts +
+            (message ? ' | ' + message : '')
+        ]);
+
+
+        SpreadsheetApp.flush();
+      }
+    } finally {
+      if (logLocked && logLock.hasLock()) {
+        logLock.releaseLock();
+      }
+    }
+
+
+    console.log(
+      cfg.team +
+      ' | ' + status +
+      ' | zadań: ' + count +
+      ' | prób: ' + attempts +
+      ' | ' + message
+    );
+  }
+}
+/**
+ * Odczytuje aktualny status partii z dziennika synchronizacji.
+ */
+function iqGetSyncStatus_(batchId) {
+  const sheet = SS.getSheetByName('Inventory_Sync_Log');
+
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    return 'NOT_FOUND';
+  }
+
+
+  const item = findInventoryBatch(sheet, batchId);
+
+
+  return item ? String(item.status) : 'NOT_FOUND';
+}
+
+
+/**
+ * Odzyskuje przerwane zadania kolejki.
+ * Nie ponawia partii o niepewnym stanie STARTED.
+ */
+function recoverInventoryQueue() {
+  const lock = LockService.getScriptLock();
+
+
+  if (!lock.tryLock(1000)) {
+    console.log('Odzyskiwanie pominięte: blokada zajęta');
+    return;
+  }
+
+
+  try {
+    const queue = SS.getSheetByName(IQ.QUEUE);
+
+
+    if (!queue || queue.getLastRow() < 2) {
+      return;
+    }
+
+
+    const rows = queue.getRange(
+      2, 1, queue.getLastRow() - 1, 9
+    ).getValues();
+
+
+    const now = Date.now();
+
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = i + 2;
+      const batchId = String(rows[i][0]);
+      const queueStatus = String(rows[i][2]);
+
+
+      if (queueStatus !== 'PROCESSING') {
+        continue;
+      }
+
+
+      const startedAt = new Date(rows[i][4]).getTime();
+
+
+      // Nie ingerujemy w zadania, które mogą nadal działać.
+      if (
+        Number.isFinite(startedAt) &&
+        now - startedAt < IQ.STALE_MS
+      ) {
+        continue;
+      }
+
+
+      const syncStatus = iqGetSyncStatus_(batchId);
+
+
+      let newStatus = 'NEEDS_REVIEW';
+      let message = '';
+
+
+      if (syncStatus === 'DONE') {
+        newStatus = 'DONE';
+        message = 'Odzyskano: zapis wcześniej zakończony';
+
+
+      } else if (
+        syncStatus === 'REPORT_SAVED' ||
+        syncStatus === 'TASKS_ASSIGNED'
+      ) {
+        // Istniejąca saveAllTasks() obsługuje te stany.
+        // Ponowienie jest dozwolone tylko po potwierdzeniu
+        // zakończenia poprzedniego wykonania.
+        newStatus = 'RECOVERY_PENDING';
+        message = 'Oczekuje na bezpieczne wznowienie: ' +
+          syncStatus;
+
+
+      } else if (syncStatus === 'STARTED') {
+        message = 'Możliwy częściowy zapis. Wymagana kontrola';
+
+
+      } else {
+        message = 'Niepotwierdzony stan synchronizacji: ' +
+          syncStatus;
+      }
+
+
+      queue.getRange(row, 3).setValue(newStatus);
+      queue.getRange(row, 9).setValue(message);
+
+
+      if (newStatus === 'DONE') {
+        queue.getRange(row, 6).setValue(new Date());
+      }
+
+
+      console.log(
+        batchId + ' | ' + syncStatus + ' -> ' + newStatus
+      );
+    }
+
+
+    SpreadsheetApp.flush();
+
+
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+}
+
+
+/**
+ * Instaluje cykliczną kontrolę przerwanych zadań.
+ */
+function installInventoryQueueRecovery() {
+  const triggers = ScriptApp.getProjectTriggers();
+
+
+  const exists = triggers.some(t =>
+    t.getHandlerFunction() === 'recoverInventoryQueue'
+  );
+
+
+  if (!exists) {
+    ScriptApp.newTrigger('recoverInventoryQueue')
+      .timeBased()
+      .everyMinutes(5)
+      .create();
+  }
+
+
+  console.log('Kontrola odzyskiwania aktywna');
+}
+/**
+ * Sprawdza, czy poprzedni zapis nadal może być aktywny.
+ * Wymaga czasu rozpoczęcia starszego niż okres bezpieczeństwa.
+ */
+function iqCanRecover_(startedAt) {
+  const timestamp = new Date(startedAt).getTime();
+
+
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+
+
+  return Date.now() - timestamp >= IQ.STALE_MS;
+}
+
+
+/**
+ * Przywraca paczkę wyłącznie ze stanów obsługiwanych
+ * przez istniejącą funkcję saveAllTasks().
+ */
+function iqResumeBatch_(item) {
+  const syncStatus = iqGetSyncStatus_(item.batchId);
+
+
+  if (syncStatus === 'DONE') {
+    return { success: true, alreadySaved: true };
+  }
+
+
+  if (
+    syncStatus !== 'REPORT_SAVED' &&
+    syncStatus !== 'TASKS_ASSIGNED'
+  ) {
+    return {
+      success: false,
+      msg: 'Niebezpieczny stan synchronizacji: ' + syncStatus
+    };
+  }
+
+
+  const dataSheet = SS.getSheetByName(IQ.DATA);
+
+
+  const payload = inventoryQueueReadPayload_(
+    dataSheet,
+    item.batchId,
+    item.chunks
+  );
+
+
+  return saveAllTasks(
+    payload.teamName,
+    payload.allTasks,
+    payload.startTime,
+    payload.batchId
+  );
+}
+function processInventoryRecovery() {
+  const queue = SS.getSheetByName(IQ.QUEUE);
+
+
+  if (!queue || queue.getLastRow() < 2) {
+    return;
+  }
+
+
+  const lock = LockService.getScriptLock();
+
+
+  if (!lock.tryLock(1000)) {
+    return;
+  }
+
+
+  let item = null;
+
+
+  try {
+    const rows = queue.getRange(
+      2, 1, queue.getLastRow() - 1, 9
+    ).getValues();
+
+
+    // Nie uruchamiamy odzyskiwania, gdy trwa zwykłe przetwarzanie.
+    if (rows.some(r => r[2] === 'PROCESSING')) {
+      return;
+    }
+
+
+    const index = rows.findIndex(r =>
+      r[2] === 'RECOVERY_PENDING' &&
+      iqCanRecover_(r[4])
+    );
+
+
+    if (index < 0) {
+      return;
+    }
+
+
+    item = {
+      row: index + 2,
+      batchId: String(rows[index][0]),
+      team: String(rows[index][1]),
+      chunks: Number(rows[index][7])
+    };
+
+
+    queue.getRange(item.row, 3).setValue('PROCESSING');
+    queue.getRange(item.row, 5).setValue(new Date());
+    queue.getRange(item.row, 9)
+      .setValue('Automatyczne wznowienie zapisu');
+
+
+    SpreadsheetApp.flush();
+
+
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+
+
+  if (!item) {
+    return;
+  }
+
+
+  let result;
+  let status = 'NEEDS_REVIEW';
+  let message = '';
+
+
+  try {
+    result = iqResumeBatch_(item);
+
+
+    if (result && result.success) {
+      status = 'DONE';
+      message = 'Odzyskano automatycznie';
+    } else {
+      message = String(
+        result && result.msg || 'Nie udało się wznowić'
+      );
+    }
+  } catch (err) {
+    message = String(err.message || err);
+  }
+
+
+  queue.getRange(item.row, 3).setValue(status);
+  queue.getRange(item.row, 6).setValue(new Date());
+  queue.getRange(item.row, 9).setValue(message);
+
+
+  SpreadsheetApp.flush();
+
+
+  console.log(
+    item.batchId + ' | ' + status + ' | ' + message
+  );
+}
+function installInventoryRecoveryWorker() {
+  const exists = ScriptApp.getProjectTriggers().some(t =>
+    t.getHandlerFunction() === 'processInventoryRecovery'
+  );
+
+
+  if (!exists) {
+    ScriptApp.newTrigger('processInventoryRecovery')
+      .timeBased()
+      .everyMinutes(1)
+      .create();
+  }
+
+
+  console.log('Automatyczne odzyskiwanie aktywne');
 }
