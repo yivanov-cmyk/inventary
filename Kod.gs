@@ -2405,75 +2405,261 @@ function getInventoryQueueStatus(batchId) {
 }
 
 
-/**
- * Przetwarza najwyżej jedną paczkę na uruchomienie.
- * Znacznik PROCESSING zapobiega równoległemu uruchomieniu pracowników.
- */
 function processInventoryQueue() {
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(1000)) return { status: 'BUSY' };
-  let item;
-  try {
-    const { q } = inventoryQueueSheets_();
-    const last = q.getLastRow();
-    if (last < 2) return { status: 'EMPTY' };
-    const rows = q.getRange(2, 1, last - 1, 9).getValues();
-    const active = rows.findIndex(r => r[2] === 'PROCESSING');
-    if (active >= 0) {
-      const activeRow = active + 2;
-      const age = Date.now() - new Date(rows[active][4]).getTime();
-      if (!Number.isFinite(age) || age > IQ.STALE_MS) {
-        return {
-          status: 'RECOVERY_REQUIRED',
-          batchId: rows[active][0]
-        };
-      }
-      return { status: 'BUSY', batchId: rows[active][0] };
-    }
-    const index = rows.findIndex(r => r[2] === 'QUEUED');
-    if (index < 0) return { status: 'EMPTY' };
-    const row = index + 2;
-    item = { row, batchId: String(rows[index][0]),
-      team: String(rows[index][1]), count: Number(rows[index][6]),
-      chunks: Number(rows[index][7]) };
-    q.getRange(row, 3).setValue('PROCESSING');
-    q.getRange(row, 5).setValue(new Date());
-    SpreadsheetApp.flush();
-  } finally {
-    if (lock.hasLock()) lock.releaseLock();
+
+
+  if (!lock.tryLock(1000)) {
+    return { status: 'BUSY' };
   }
 
 
-  // Nie trzymamy ScriptLock podczas saveAllTasks(), bo ta funkcja
-  // samodzielnie pobiera ten sam typ blokady.
+  let item = null;
+
+
+  try {
+    const { q } = inventoryQueueSheets_();
+    const last = q.getLastRow();
+
+
+    if (last < 2) {
+      return { status: 'EMPTY' };
+    }
+
+
+    const rows = q.getRange(2, 1, last - 1, 9).getValues();
+
+
+    // Kontrola przerwanego przetwarzania.
+    const active = rows.findIndex(r => r[2] === 'PROCESSING');
+
+
+    if (active >= 0) {
+      const row = active + 2;
+      const batchId = String(rows[active][0]);
+      const startedAt = new Date(rows[active][4]).getTime();
+      const age = Date.now() - startedAt;
+
+
+      if (!Number.isFinite(age) || age < IQ.STALE_MS) {
+        return { status: 'BUSY', batchId };
+      }
+
+
+      const syncStatus = iqGetSyncStatus_(batchId);
+
+
+      if (syncStatus === 'DONE') {
+        q.getRange(row, 3).setValue('DONE');
+        q.getRange(row, 6).setValue(new Date());
+        q.getRange(row, 9).setValue(
+          'Potwierdzono zakończenie w Inventory_Sync_Log'
+        );
+      } else {
+        q.getRange(row, 3).setValue('NEEDS_REVIEW');
+        q.getRange(row, 9).setValue(
+          'Przerwane przetwarzanie. Status synchronizacji: ' +
+          syncStatus
+        );
+      }
+
+
+      rows[active][2] = syncStatus === 'DONE'
+        ? 'DONE'
+        : 'NEEDS_REVIEW';
+
+
+      SpreadsheetApp.flush();
+    }
+
+
+    // Dawne zadania oczekujące na odzyskanie wymagają kontroli.
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i][2] !== 'RECOVERY_PENDING') {
+        continue;
+      }
+
+
+      const batchId = String(rows[i][0]);
+      const syncStatus = iqGetSyncStatus_(batchId);
+      const status = syncStatus === 'DONE'
+        ? 'DONE'
+        : 'NEEDS_REVIEW';
+
+
+      q.getRange(i + 2, 3).setValue(status);
+      q.getRange(i + 2, 9).setValue(
+        'Kontrola po przerwaniu. Status synchronizacji: ' +
+        syncStatus
+      );
+
+
+      if (status === 'DONE') {
+        q.getRange(i + 2, 6).setValue(new Date());
+      }
+
+
+      rows[i][2] = status;
+    }
+
+
+    // Wybieramy tylko jedno nowe zgłoszenie.
+    const index = rows.findIndex(r => r[2] === 'QUEUED');
+
+
+    if (index < 0) {
+      SpreadsheetApp.flush();
+      return { status: 'EMPTY' };
+    }
+
+
+    item = {
+      row: index + 2,
+      batchId: String(rows[index][0]),
+      team: String(rows[index][1]),
+      count: Number(rows[index][6]),
+      chunks: Number(rows[index][7])
+    };
+
+
+    q.getRange(item.row, 3).setValue('PROCESSING');
+    q.getRange(item.row, 5).setValue(new Date());
+    q.getRange(item.row, 9).setValue('');
+
+
+    SpreadsheetApp.flush();
+
+
+  } finally {
+    if (lock.hasLock()) {
+      lock.releaseLock();
+    }
+  }
+
+
   let status = 'NEEDS_REVIEW';
   let message = '';
+
+
   try {
     const dataSheet = SS.getSheetByName(IQ.DATA);
-    const payload = inventoryQueueReadPayload_(dataSheet, item.batchId, item.chunks);
-    if (payload.teamName !== item.team || payload.allTasks.length !== item.count) {
-      throw new Error('Niezgodność liczby zadań lub ekipy');
+
+
+    const payload = inventoryQueueReadPayload_(
+      dataSheet,
+      item.batchId,
+      item.chunks
+    );
+
+
+    if (
+      payload.teamName !== item.team ||
+      payload.allTasks.length !== item.count
+    ) {
+      throw new Error('Niezgodność danych paczki');
     }
-    const result = saveAllTasks(payload.teamName, payload.allTasks,
-      payload.startTime, payload.batchId);
-    if (result && result.success) {
+
+
+    const result = saveAllTasks(
+      payload.teamName,
+      payload.allTasks,
+      payload.startTime,
+      payload.batchId
+    );
+
+
+    const syncStatus = iqGetSyncStatus_(item.batchId);
+
+
+    if (result && result.success && syncStatus === 'DONE') {
       status = 'DONE';
     } else {
-      // Nie ponawiamy automatycznie: STARTED może oznaczać częściowy zapis.
-      message = String(result && result.msg || 'Brak potwierdzenia zapisu');
+      message = String(
+        result && result.msg ||
+        'Brak potwierdzenia zakończenia zapisu'
+      );
+      message += ' | SyncStatus: ' + syncStatus;
     }
+
+
   } catch (err) {
     message = String(err.message || err);
   }
 
 
-  // Zapis stanu nie wymaga ScriptLock, bo jeden pracownik jest aktywny.
-  const q = SS.getSheetByName(IQ.QUEUE);
-  q.getRange(item.row, 3).setValue(status);
-  q.getRange(item.row, 6).setValue(new Date());
-  q.getRange(item.row, 9).setValue(message);
-  SpreadsheetApp.flush();
-  return { batchId: item.batchId, status, message };
+  // Zapis końcowego statusu pod blokadą.
+  const finishLock = LockService.getScriptLock();
+
+
+  if (!finishLock.tryLock(25000)) {
+    console.error(
+      'Nie zapisano statusu końcowego: ' + item.batchId
+    );
+
+
+    return {
+      batchId: item.batchId,
+      status: 'STATUS_UPDATE_FAILED'
+    };
+  }
+
+
+  try {
+    const q = SS.getSheetByName(IQ.QUEUE);
+
+
+    const currentBatchId = String(
+      q.getRange(item.row, 1).getValue()
+    );
+
+
+    const currentStatus = String(
+      q.getRange(item.row, 3).getValue()
+    );
+
+
+    if (
+      currentBatchId !== item.batchId ||
+      currentStatus !== 'PROCESSING'
+    ) {
+      console.error(
+        'Stan kolejki zmienił się podczas zapisu: ' +
+        item.batchId
+      );
+
+
+      return {
+        batchId: item.batchId,
+        status: 'STATE_CONFLICT'
+      };
+    }
+
+
+    q.getRange(item.row, 3).setValue(status);
+    q.getRange(item.row, 6).setValue(new Date());
+    q.getRange(item.row, 9).setValue(message);
+
+
+    SpreadsheetApp.flush();
+
+
+  } finally {
+    if (finishLock.hasLock()) {
+      finishLock.releaseLock();
+    }
+  }
+
+
+  console.log(
+    item.batchId + ' | ' + status + ' | ' + message
+  );
+
+
+  return {
+    batchId: item.batchId,
+    status,
+    message
+  };
 }
 
 
@@ -3005,4 +3191,19 @@ function installInventoryRecoveryWorker() {
 
 
   console.log('Automatyczne odzyskiwanie aktywne');
+}
+function stopOldInventoryWorkers() {
+  const handlers = [
+    'processInventoryQueue',
+    'recoverInventoryQueue',
+    'processInventoryRecovery'
+  ];
+
+
+  ScriptApp.getProjectTriggers()
+    .filter(t => handlers.includes(t.getHandlerFunction()))
+    .forEach(t => ScriptApp.deleteTrigger(t));
+
+
+  console.log('Zatrzymano stare wyzwalacze kolejki.');
 }
